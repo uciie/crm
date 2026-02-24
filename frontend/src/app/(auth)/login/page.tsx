@@ -68,7 +68,6 @@ export default function LoginPage() {
             error={errors.password?.message}
           />
           <div className="flex justify-end">
-            {/* ✅ CORRECTION : /auth/forgot-password (avec dossier auth/) */}
             <Link
               href="/forgot-password"
               className="text-[11px] text-slate-600 hover:text-blue-400 transition-colors tracking-wide"

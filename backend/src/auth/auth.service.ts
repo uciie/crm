@@ -158,7 +158,7 @@ export class AuthService {
       {
         data: { full_name: fullName },
         // redirectTo : URL de la page d'acceptation d'invitation
-        redirectTo: `${this.config.get('FRONTEND_URL')}/accept-invite`,
+        redirectTo: `${window.location.origin}/auth/update-password`,
       }
     )
 

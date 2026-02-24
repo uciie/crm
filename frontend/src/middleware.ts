@@ -2,16 +2,17 @@ import { createServerClient }        from '@supabase/ssr'
 import { NextResponse, NextRequest } from 'next/server'
 
 // ── Routes publiques (sans authentification) ──────────────────
+// ⚠️ Le groupe (auth) ne génère PAS de préfixe /auth/ dans les URLs.
+//    Donc les pages auth sont à /login, /register, /forgot-password, /update-password
+//    La seule route avec /auth/ dans l'URL est le callback API Supabase.
 
 const PUBLIC_PATHS = [
   '/login',
   '/register',
-  '/auth/callback',
-  '/forgot-password',
-  '/update-password',
+  '/auth/callback',       // ← route API (src/app/auth/callback/route.ts)
+  '/forgot-password',     // ← page (src/app/(auth)/forgot-password/page.tsx)
+  '/update-password',     // ← page (src/app/(auth)/update-password/page.tsx)
 ]
-
-// ── Middleware ────────────────────────────────────────────────
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -35,21 +36,18 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // getUser() valide le JWT côté serveur (seule méthode sécurisée en middleware)
   const { data: { user } } = await supabase.auth.getUser()
 
   const pathname   = request.nextUrl.pathname
   const isPublic   = PUBLIC_PATHS.some(p => pathname.startsWith(p))
   const isAuthPage = ['/login', '/register'].some(p => pathname.startsWith(p))
 
-  // Utilisateur non authentifié → route protégée
   if (!user && !isPublic) {
     const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('redirectTo', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  // Utilisateur authentifié → page de login/register inutile
   if (user && isAuthPage) {
     return NextResponse.redirect(new URL('/dashboard', request.url))
   }

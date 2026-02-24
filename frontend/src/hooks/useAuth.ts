@@ -1,10 +1,15 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
-import { useRouter }                                  from 'next/navigation'
-import { createClient }                               from '@/lib/supabase/client'
-import type { User }                                  from '@supabase/supabase-js'
-import type { Profile }                               from '@/types'
+import { useEffect, useState } from 'react'
+import { useRouter }           from 'next/navigation'
+import { createClient }        from '@/lib/supabase/client'
+import type { User }           from '@supabase/supabase-js'
+import type { Profile }        from '@/types'
+
+// Client instancié une seule fois au niveau module — hors de tout composant/hook.
+// Cela garantit qu'il n'y a jamais deux instances simultanées,
+// même en React Strict Mode (double mount).
+const supabase = createClient()
 
 export function useAuth() {
   const [user, setUser]       = useState<User | null>(null)
@@ -12,64 +17,32 @@ export function useAuth() {
   const [loading, setLoading] = useState(true)
   const router                = useRouter()
 
-  const supabase = useMemo(() => createClient(), [])
+  useEffect(() => {
+    let mounted = true
 
-  const loadProfile = useCallback(async (userId: string) => {
-    console.log('[useAuth] loadProfile → start', userId)
-    try {
+    const loadProfile = async (userId: string) => {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single()
 
-      if (error) {
-        // ⚠️ Si la table profiles n'est pas accessible (RLS, table inexistante, etc.)
-        // on construit un profil minimal depuis les métadonnées Supabase Auth
-        // pour ne pas bloquer l'interface.
-        console.warn('[useAuth] loadProfile error:', error.message)
-        console.warn('[useAuth] Code:', error.code, '— Hint:', error.hint)
-
-        // Profil de fallback : l'utilisateur peut accéder à l'app
-        // mais certaines données de rôle peuvent être manquantes
-        setProfile(null)
-        return
+      if (error && error.code !== 'PGRST116') {
+        console.warn('[useAuth] profil introuvable:', error.code, error.message)
       }
-
-      console.log('[useAuth] loadProfile → success, role:', data?.role)
-      setProfile(data)
-    } catch (e) {
-      console.error('[useAuth] loadProfile unexpected error:', e)
-      setProfile(null)
+      if (mounted) setProfile(data ?? null)
     }
-  }, [supabase])
-
-  useEffect(() => {
-    let mounted = true
-    console.log('[useAuth] init → start')
 
     const init = async () => {
       try {
-        console.log('[useAuth] calling getUser()...')
-        const { data: { user: verifiedUser }, error } = await supabase.auth.getUser()
-
-        console.log('[useAuth] getUser() result:', {
-          userId: verifiedUser?.id ?? null,
-          error:  error?.message ?? null,
-        })
-
+        const { data: { user: verifiedUser } } = await supabase.auth.getUser()
         if (!mounted) return
-
         setUser(verifiedUser)
-
-        if (verifiedUser) {
-          await loadProfile(verifiedUser.id)
-        }
+        if (verifiedUser) await loadProfile(verifiedUser.id)
       } catch (e) {
         console.error('[useAuth] init error:', e)
         if (mounted) setUser(null)
       } finally {
-        console.log('[useAuth] setLoading(false)')
         if (mounted) setLoading(false)
       }
     }
@@ -78,7 +51,6 @@ export function useAuth() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('[useAuth] onAuthStateChange:', event, session?.user?.id ?? null)
         if (!mounted) return
         const currentUser = session?.user ?? null
         setUser(currentUser)
@@ -95,7 +67,7 @@ export function useAuth() {
       mounted = false
       subscription.unsubscribe()
     }
-  }, [supabase, loadProfile, router])
+  }, [router])
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
