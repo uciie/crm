@@ -1,0 +1,57 @@
+# docker-compose.yml — Environnement de développement local CRM SaaS
+# Lance le frontend Next.js + backend NestJS en un seul commande : docker compose up
+
+version: '3.9'
+
+services:
+  # ──────────────────────────────────────────
+  # Frontend Next.js
+  # ──────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    env_file:
+      - ./frontend/.env.local
+    environment:
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_API_URL=http://backend:3001
+    depends_on:
+      - backend
+    networks:
+      - crm-network
+
+  # ──────────────────────────────────────────
+  # Backend NestJS
+  # ──────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - '3001:3001'
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    env_file:
+      - ./backend/.env
+    environment:
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - BREVO_API_KEY=${BREVO_API_KEY}
+      - PORT=3001
+      - NODE_ENV=development
+    networks:
+      - crm-network
+
+networks:
+  crm-network:
+    driver: bridge
