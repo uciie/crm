@@ -70,7 +70,7 @@ export default function LoginPage() {
           <div className="flex justify-end">
             {/* ✅ CORRECTION : /auth/forgot-password (avec dossier auth/) */}
             <Link
-              href="/auth/forgot-password"
+              href="/forgot-password"
               className="text-[11px] text-slate-600 hover:text-blue-400 transition-colors tracking-wide"
             >
               Mot de passe oublié ?

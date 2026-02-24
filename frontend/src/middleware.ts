@@ -7,8 +7,8 @@ const PUBLIC_PATHS = [
   '/login',
   '/register',
   '/auth/callback',
-  '/auth/forgot-password',
-  '/auth/update-password',
+  '/forgot-password',
+  '/update-password',
 ]
 
 // ── Middleware ────────────────────────────────────────────────

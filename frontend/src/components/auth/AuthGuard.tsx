@@ -1,21 +1,17 @@
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
-import { useRouter, usePathname }    from 'next/navigation'
-import Link                          from 'next/link'
-import { useAuth }                   from '@/hooks/useAuth'
-import { cn }                        from '@/lib/utils'
-import type { UserRole }             from '@/types'
+import { useEffect, useState, type ReactNode } from 'react'
+import { useRouter, usePathname }              from 'next/navigation'
+import Link                                    from 'next/link'
+import { useAuth }                             from '@/hooks/useAuth'
+import { cn }                                  from '@/lib/utils'
+import type { UserRole }                       from '@/types'
 
-// ============================================================
-// AUTH GUARD
-// Wraps protected pages client-side (middleware handles server-side).
-// Prevents flash of protected content before redirect.
-// ============================================================
+// ── Auth Guard ────────────────────────────────────────────────
 
 interface AuthGuardProps {
-  children:       ReactNode
-  requiredRole?:  UserRole
+  children:      ReactNode
+  requiredRole?: UserRole
 }
 
 export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
@@ -40,24 +36,33 @@ export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
   return <>{children}</>
 }
 
-// ── Loading screen ───────────────────────────────────────────
+// ── Loading screen ────────────────────────────────────────────
+// Fond sombre cohérent avec le design Precision Industrial
 
 function AuthLoadingScreen() {
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-7 h-7 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-        <p className="text-xs font-medium text-gray-400 tracking-wider">Verification en cours...</p>
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="flex flex-col items-center gap-4">
+        {/* Spinner géométrique */}
+        <div className="relative w-8 h-8">
+          <div className="absolute inset-0 border border-slate-700 rounded-full" />
+          <div className="absolute inset-0 border-t border-blue-500 rounded-full animate-spin" />
+        </div>
+        {/* Label */}
+        <div className="text-center space-y-1">
+          <p className="text-[10px] font-bold tracking-[0.25em] uppercase text-slate-500">
+            Vérification en cours
+          </p>
+          <p className="text-[9px] font-mono text-slate-700">
+            Validation de la session...
+          </p>
+        </div>
       </div>
     </div>
   )
 }
 
-// ============================================================
-// ROLE GATE
-// Inline conditional rendering based on role.
-// Usage: <RoleGate allowedRoles={['admin', 'commercial']}> ... </RoleGate>
-// ============================================================
+// ── Role Gate ─────────────────────────────────────────────────
 
 interface RoleGateProps {
   children:     ReactNode
@@ -72,16 +77,13 @@ export function RoleGate({ children, allowedRoles, fallback = null }: RoleGatePr
   return <>{children}</>
 }
 
-// ============================================================
-// ROLE-AWARE SIDEBAR (replaces existing Sidebar.tsx)
-// Filters nav items based on user role. No emojis.
-// ============================================================
+// ── Role Navigation ───────────────────────────────────────────
 
 interface NavItem {
-  href:      string
-  label:     string
-  abbr:      string // 2-letter abbreviation used as icon
-  roles:     UserRole[]
+  href:  string
+  label: string
+  abbr:  string
+  roles: UserRole[]
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -102,12 +104,7 @@ const ROLE_META: Record<UserRole, { label: string; style: string }> = {
 }
 
 function getInitials(fullName: string): string {
-  return fullName
-    .split(' ')
-    .map(n => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
+  return fullName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
 }
 
 export function RoleNavigation() {
@@ -122,8 +119,6 @@ export function RoleNavigation() {
 
   return (
     <aside className="w-56 bg-slate-950 border-r border-slate-800/60 flex flex-col h-full shrink-0">
-
-      {/* Logo */}
       <div className="px-5 py-5 border-b border-slate-800/60">
         <div className="flex items-center gap-3">
           <div className="w-7 h-7 border border-blue-500/40 flex items-center justify-center shrink-0">
@@ -133,7 +128,6 @@ export function RoleNavigation() {
         </div>
       </div>
 
-      {/* Role badge */}
       <div className="px-4 py-3 border-b border-slate-800/60">
         <span className={cn(
           'inline-flex items-center px-2 py-0.5 text-[9px] font-bold tracking-[0.18em] uppercase border',
@@ -143,12 +137,10 @@ export function RoleNavigation() {
         </span>
       </div>
 
-      {/* Navigation */}
       <nav className="flex-1 px-2 py-4 space-y-0.5 overflow-y-auto">
         <p className="px-3 mb-3 text-[9px] font-bold text-slate-700 tracking-[0.2em] uppercase">
           Navigation
         </p>
-
         {visibleItems.map(item => {
           const isActive = pathname.startsWith(item.href)
           return (
@@ -170,15 +162,12 @@ export function RoleNavigation() {
                 {item.abbr}
               </span>
               {item.label}
-              {isActive && (
-                <span className="ml-auto w-1 h-1 rounded-full bg-blue-400 shrink-0" />
-              )}
+              {isActive && <span className="ml-auto w-1 h-1 rounded-full bg-blue-400 shrink-0" />}
             </Link>
           )
         })}
       </nav>
 
-      {/* Profile footer */}
       <div className="px-4 py-4 border-t border-slate-800/60">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
