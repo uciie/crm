@@ -4,22 +4,45 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
 async function getAuthHeaders(): Promise<HeadersInit> {
   const supabase = createClient()
-  const { data: { user }, error } = await supabase.auth.getUser()
+  const { data: { session } } = await supabase.auth.getSession()
 
-  if (error || !user) {
-    // Session invalide : on ne met pas de token, le backend retournera 401
+  if (!session?.access_token) {
+    // Pas de session locale — tentative de refresh
+    const { data: { session: refreshed } } = await supabase.auth.refreshSession()
+    if (refreshed?.access_token) {
+      return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${refreshed.access_token}`,
+      }
+    }
+    // Toujours pas de session — on laisse le backend retourner 401
     return { 'Content-Type': 'application/json' }
   }
 
-  // Récupère la session (maintenant fiable car getUser() a validé)
-  const { data: { session } } = await supabase.auth.getSession()
-
   return {
     'Content-Type': 'application/json',
-    ...(session?.access_token
-      ? { 'Authorization': `Bearer ${session.access_token}` }
-      : {}),
+    'Authorization': `Bearer ${session.access_token}`,
   }
+}
+
+async function handleResponse<T>(res: Response): Promise<T> {
+  if (res.status === 401) {
+    if (typeof window !== 'undefined') window.location.href = '/login'
+    throw new Error('Session expirée')
+  }
+  if (!res.ok) {
+    const text = await res.text()
+    // Tente de parser le message d'erreur JSON du backend
+    try {
+      const json = JSON.parse(text)
+      throw new Error(json.message ?? json.error ?? text)
+    } catch {
+      throw new Error(text)
+    }
+  }
+  // Gère les réponses vides (ex: DELETE 204)
+  const text = await res.text()
+  return text ? JSON.parse(text) : ({} as T)
 }
 
 export const api = {
@@ -27,49 +50,32 @@ export const api = {
     const res = await fetch(`${BASE_URL}/api/v1${path}`, {
       headers: await getAuthHeaders(),
     })
-    if (res.status === 401) {
-      // Redirection automatique si session expirée
-      if (typeof window !== 'undefined') window.location.href = '/login'
-      throw new Error('Session expirée')
-    }
-    if (!res.ok) throw new Error(await res.text())
-    return res.json()
+    return handleResponse<T>(res)
   },
 
   async post<T = any>(path: string, body: any): Promise<T> {
     const res = await fetch(`${BASE_URL}/api/v1${path}`, {
-      method: 'POST',
+      method:  'POST',
       headers: await getAuthHeaders(),
-      body: JSON.stringify(body),
+      body:    JSON.stringify(body),
     })
-    if (res.status === 401) {
-      if (typeof window !== 'undefined') window.location.href = '/login'
-      throw new Error('Session expirée')
-    }
-    if (!res.ok) throw new Error(await res.text())
-    return res.json()
+    return handleResponse<T>(res)
   },
 
   async patch<T = any>(path: string, body: any): Promise<T> {
     const res = await fetch(`${BASE_URL}/api/v1${path}`, {
-      method: 'PATCH',
+      method:  'PATCH',
       headers: await getAuthHeaders(),
-      body: JSON.stringify(body),
+      body:    JSON.stringify(body),
     })
-    if (res.status === 401) {
-      if (typeof window !== 'undefined') window.location.href = '/login'
-      throw new Error('Session expirée')
-    }
-    if (!res.ok) throw new Error(await res.text())
-    return res.json()
+    return handleResponse<T>(res)
   },
 
   async delete<T = any>(path: string): Promise<T> {
     const res = await fetch(`${BASE_URL}/api/v1${path}`, {
-      method: 'DELETE',
+      method:  'DELETE',
       headers: await getAuthHeaders(),
     })
-    if (!res.ok) throw new Error(await res.text())
-    return res.json()
+    return handleResponse<T>(res)
   },
 }

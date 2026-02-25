@@ -52,7 +52,7 @@ export default function DashboardPage() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">
+        <h2 className="text-lg font-semibold text-gray-100">
           Bonjour, {profile?.full_name?.split(' ')[0]} 👋
         </h2>
         <p className="text-sm text-gray-500">Voici votre résumé du jour.</p>
@@ -60,10 +60,10 @@ export default function DashboardPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard label="CA ce mois"           value={kpis ? formatCurrency(kpis.revenue_this_month) : '—'} icon="💰" color="#6366f1" sub="+12% vs mois dernier"/>
-        <StatsCard label="Taux de conversion"   value={kpis ? `${kpis.conversion_rate}%` : '—'}              icon="📈" color="#34d399" sub="Leads gagnés / total"/>
-        <StatsCard label="Tâches en retard"     value={kpis?.overdue_tasks ?? '—'}                            icon="⏰" color="#f87171" sub="À traiter en priorité"/>
-        <StatsCard label="Nouveaux contacts"    value={kpis?.new_contacts   ?? '—'}                            icon="👤" color="#f59e0b" sub="Ce mois-ci"/>
+        <StatsCard label="CA ce mois"           value={kpis ? formatCurrency(kpis.revenue_this_month) : '—'} color="#6366f1" sub="+12% vs mois dernier"/>
+        <StatsCard label="Taux de conversion"   value={kpis ? `${kpis.conversion_rate}%` : '—'}              color="#34d399" sub="Leads gagnés / total"/>
+        <StatsCard label="Tâches en retard"     value={kpis?.overdue_tasks ?? '—'}                           color="#f87171" sub="À traiter en priorité"/>
+        <StatsCard label="Nouveaux contacts"    value={kpis?.new_contacts   ?? '—'}                          color="#f59e0b" sub="Ce mois-ci"/>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
