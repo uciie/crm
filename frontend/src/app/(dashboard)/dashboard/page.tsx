@@ -22,19 +22,27 @@ export default function DashboardPage() {
   const [loading, setLoading]           = useState(true)
 
   useEffect(() => {
+    if (loading||!profile) return;
     const load = async () => {
-      const [k, l, a] = await Promise.all([
-        api.get('/dashboard/kpis'),
-        api.get('/dashboard/leads-by-status'),
-        api.get('/dashboard/activity'),
-      ])
-      setKpis(k)
-      setLeadsByStatus(l)
-      setActivity(a)
-      setLoading(false)
-    }
-    load().catch(() => setLoading(false))
-  }, [])
+      try {
+        setLoading(true);
+        const [k, l, a] = await Promise.all([
+          api.get('/dashboard/kpis'),
+          api.get('/dashboard/leads-by-status'),
+          api.get('/dashboard/activity')
+        ]);
+        setKpis(k);
+        setLeadsByStatus(l);
+        setActivity(a);
+      } catch (error) {
+        console.error("Erreur chargement dashboard", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+  }, [profile, loading])
 
   const funnelData = leadsByStatus.map((s: any) => ({
     stage: s.status, count: Number(s.count),
