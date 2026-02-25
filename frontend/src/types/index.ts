@@ -1,6 +1,9 @@
 // ============================================================
-// frontend/src/types/index.ts — Types TypeScript partagés
+// frontend/src/types/index.ts
+// Types TypeScript unifiés — fusion de crm.types.ts + index.ts
 // ============================================================
+
+// ── Rôles et utilisateurs ─────────────────────────────────────
 
 export type UserRole = 'admin' | 'commercial' | 'utilisateur'
 
@@ -15,35 +18,47 @@ export interface Profile {
   updated_at: string
 }
 
+// ── Entreprises ───────────────────────────────────────────────
+
+export type CompanySize = '1-10' | '11-50' | '51-200' | '201-500' | '500+'
+
 export interface Company {
-  id:             string
-  name:           string
-  domain?:        string
-  industry?:      string
-  size?:          string
-  website?:       string
-  phone?:         string
-  address?:       string
-  city?:          string
-  country?:       string
-  logo_url?:      string
-  annual_revenue?: number
-  notes?:         string
-  created_at:     string
-  updated_at:     string
+  id:              string
+  name:            string
+  domain?:         string
+  industry?:       string
+  size?:           CompanySize
+  website?:        string
+  phone?:          string
+  address?:        string
+  city?:           string
+  country?:        string
+  logo_url?:       string
+  annual_revenue?: number | string
+  notes?:          string
+  created_at:      string
+  updated_at:      string
+  contacts_count?: number
 }
 
 export interface CompanyDetail extends Company {
   contacts: ContactSummary[]
 }
 
+export interface CompanyOption {
+  id:   string
+  name: string
+}
+
+// ── Contacts ──────────────────────────────────────────────────
+
 export interface ContactSummary {
-  id:         string
-  first_name: string
-  last_name:  string
-  email?:     string
-  job_title?: string
-  phone?:     string
+  id:          string
+  first_name:  string
+  last_name:   string
+  email?:      string
+  job_title?:  string
+  phone?:      string
   avatar_url?: string
 }
 
@@ -68,9 +83,10 @@ export interface Contact {
   assigned_to?:  string
   created_at:    string
   updated_at:    string
-  // Relations (jointures)
-  company?:      { id: string; name: string; logo_url?: string }
-  assigned_to_profile?: { id: string; full_name: string; avatar_url?: string }
+  // Relations jointures
+  company?:              Pick<Company, 'id' | 'name' | 'logo_url' | 'industry' | 'website'>
+  assignee?:             Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
+  assigned_to_profile?:  Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
 }
 
 export interface ContactDetail {
@@ -78,44 +94,59 @@ export interface ContactDetail {
     id:            string
     first_name:    string
     last_name:     string
-    email?:        string
-    phone?:        string
-    mobile?:       string
-    job_title?:    string
-    department?:   string
-    linkedin_url?: string
-    address?:      string
-    city?:         string
-    country?:      string
+    email:         string
+    phone:         string
+    mobile:        string
+    job_title:     string
+    department:    string
+    linkedin_url:  string
+    address:       string
+    city:          string
+    country:       string
     is_subscribed: boolean
-    notes?:        string
-    avatar_url?:   string
+    notes:         string
+    avatar_url:    string
     created_at:    string
     updated_at:    string
   }
-  companies: {
-    id:       string
-    name:     string
-    logo_url?: string
-    industry?: string
-    website?:  string
-  } | null
+  companies: Pick<Company, 'id' | 'name' | 'logo_url' | 'industry' | 'website'> | null
 }
+
+// ── Interactions / Communications ────────────────────────────
+
+export type CommunicationType      = 'email' | 'appel' | 'réunion' | 'note' | 'sms'
+export type CommunicationDirection = 'entrant' | 'sortant'
 
 export interface Interaction {
-  id:          string
-  type:        'email' | 'appel' | 'réunion' | 'note' | 'sms'
-  subject?:    string
-  body?:       string
-  direction?:  'entrant' | 'sortant'
+  id:            string
+  type:          CommunicationType
+  subject?:      string
+  body?:         string
+  direction?:    CommunicationDirection
   duration_min?: number
-  occurred_at: string
-  author?:     { full_name: string; avatar_url?: string }
+  scheduled_at?: string
+  occurred_at:   string
+  contact_id?:   string
+  lead_id?:      string
+  company_id?:   string
+  created_at:    string
+  author?:       Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
 }
 
+export interface Communication extends Interaction {
+  brevo_message_id?: string
+}
+
+// ── Leads ─────────────────────────────────────────────────────
+
 export type LeadStatus =
-  | 'nouveau' | 'contacté' | 'qualifié'
-  | 'proposition' | 'négociation' | 'gagné' | 'perdu'
+  | 'nouveau'
+  | 'contacté'
+  | 'qualifié'
+  | 'proposition'
+  | 'négociation'
+  | 'gagné'
+  | 'perdu'
 
 export interface Lead {
   id:                   string
@@ -132,14 +163,20 @@ export interface Lead {
   notes?:               string
   created_at:           string
   updated_at:           string
-  contact?:             Pick<Contact, 'id' | 'first_name' | 'last_name' | 'email' | 'avatar_url'>
-  company?:             Pick<Company, 'id' | 'name' | 'logo_url'>
-  assignee?:            Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
+  contact?:  Pick<Contact, 'id' | 'first_name' | 'last_name' | 'email' | 'avatar_url'>
+  company?:  Pick<Company, 'id' | 'name' | 'logo_url'>
+  assignee?: Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
 }
 
+// ── Pipeline ──────────────────────────────────────────────────
+
 export type PipelineStage =
-  | 'prospect' | 'qualification' | 'proposition'
-  | 'négociation' | 'gagné' | 'perdu'
+  | 'prospect'
+  | 'qualification'
+  | 'proposition'
+  | 'négociation'
+  | 'gagné'
+  | 'perdu'
 
 export interface PipelineStageConfig {
   id:          string
@@ -164,47 +201,31 @@ export interface KanbanColumn extends PipelineStageConfig {
   total_value: number
 }
 
+// ── Tâches ────────────────────────────────────────────────────
+
 export type TaskStatus   = 'à_faire' | 'en_cours' | 'terminée' | 'annulée'
 export type TaskPriority = 'basse' | 'moyenne' | 'haute' | 'urgente'
 
 export interface Task {
-  id:           string
-  title:        string
-  description?: string
-  status:       TaskStatus
-  priority:     TaskPriority
-  due_date?:    string
+  id:            string
+  title:         string
+  description?:  string
+  status:        TaskStatus
+  priority:      TaskPriority
+  due_date?:     string
   completed_at?: string
-  contact_id?:  string
-  lead_id?:     string
-  company_id?:  string
-  assigned_to:  string
-  created_at:   string
-  updated_at:   string
-  contact?:     Pick<Contact, 'id' | 'first_name' | 'last_name' | 'email'>
-  lead?:        Pick<Lead, 'id' | 'title' | 'value'>
-  assignee?:    Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
+  contact_id?:   string
+  lead_id?:      string
+  company_id?:   string
+  assigned_to:   string
+  created_at:    string
+  updated_at:    string
+  contact?:  Pick<Contact, 'id' | 'first_name' | 'last_name' | 'email'>
+  lead?:     Pick<Lead, 'id' | 'title' | 'value'>
+  assignee?: Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
 }
 
-export type CommunicationType = 'email' | 'appel' | 'réunion' | 'note' | 'sms'
-export type CommunicationDirection = 'entrant' | 'sortant'
-
-export interface Communication {
-  id:                string
-  type:              CommunicationType
-  subject?:          string
-  body?:             string
-  direction?:        CommunicationDirection
-  duration_min?:     number
-  scheduled_at?:     string
-  occurred_at:       string
-  contact_id?:       string
-  lead_id?:          string
-  company_id?:       string
-  brevo_message_id?: string
-  created_at:        string
-  author?:           Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
-}
+// ── Campagnes email ───────────────────────────────────────────
 
 export interface EmailCampaign {
   id:                  string
@@ -221,7 +242,9 @@ export interface EmailCampaign {
   updated_at:          string
 }
 
-// ── Types utilitaires ──────────────────────────────────────
+// ── Pagination et filtres ─────────────────────────────────────
+
+export type SortDirection = 'asc' | 'desc'
 
 export interface Pagination {
   page:       number
@@ -235,9 +258,86 @@ export interface PaginatedResponse<T> {
   pagination: Pagination
 }
 
+export interface ContactFilters {
+  search?:       string
+  company_id?:   string
+  assigned_to?:  string
+  is_subscribed?: boolean
+  city?:         string
+  page?:         number
+  limit?:        number
+  sort_by?:      keyof Contact
+  sort_dir?:     SortDirection
+}
+
+export interface CompanyFilters {
+  search?:   string
+  industry?: string
+  city?:     string
+  page?:     number
+  limit?:    number
+}
+
+// ── DTOs (payloads formulaires) ───────────────────────────────
+
+export interface CreateContactPayload {
+  first_name:     string
+  last_name:      string
+  email?:         string
+  phone?:         string
+  mobile?:        string
+  job_title?:     string
+  department?:    string
+  company_id?:    string
+  linkedin_url?:  string
+  address?:       string
+  city?:          string
+  country?:       string
+  is_subscribed?: boolean
+  notes?:         string
+  assigned_to?:   string
+}
+
+export interface CreateCompanyPayload {
+  name:             string
+  domain?:          string
+  industry?:        string
+  size?:            CompanySize
+  website?:         string
+  phone?:           string
+  address?:         string
+  city?:            string
+  country?:         string
+  annual_revenue?:  number
+  notes?:           string
+}
+
+export interface CreateInteractionPayload {
+  type:        CommunicationType
+  subject?:    string
+  body?:       string
+  direction?:  CommunicationDirection
+  contact_id?: string
+  lead_id?:    string
+  company_id?: string
+}
+
+// ── Dashboard ─────────────────────────────────────────────────
+
 export interface DashboardKpis {
   revenue_this_month: number
   conversion_rate:    number
   overdue_tasks:      number
   new_contacts:       number
+}
+
+// ── Système de notifications Toast ───────────────────────────
+
+export type ToastType = 'success' | 'error' | 'warning' | 'info'
+
+export interface Toast {
+  id:       string
+  type:     ToastType
+  title:    string
+  message?: string
 }
