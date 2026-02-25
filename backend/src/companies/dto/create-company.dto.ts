@@ -51,7 +51,8 @@ export class CreateCompanyDto {
   logo_url?: string
 
   @IsOptional()
-  annual_revenue?: number
+  @IsDecimal()
+  annual_revenue?: string | number
 
   @IsOptional()
   @IsString()

@@ -113,10 +113,14 @@ export class CompaniesService {
   }
 
   async create(dto: CreateCompanyDto, userId: string) {
+    const { annual_revenue, ...rest } = dto
     const [newCompany] = await db
       .insert(companies)
       .values({
-        ...dto,
+        ...rest,
+        ...(annual_revenue !== undefined
+          ? { annual_revenue: String(annual_revenue) }
+          : {}),
         created_by: userId,
       })
       .returning()
@@ -125,9 +129,16 @@ export class CompaniesService {
   }
 
   async update(id: string, dto: Partial<CreateCompanyDto>) {
+    const { annual_revenue, ...rest } = dto
     const [updated] = await db
       .update(companies)
-      .set({ ...dto, updated_at: new Date() })
+      .set({
+        ...rest,
+        ...(annual_revenue !== undefined
+          ? { annual_revenue: String(annual_revenue) }
+          : {}),
+        updated_at: new Date(),
+      })
       .where(eq(companies.id, id))
       .returning()
 
