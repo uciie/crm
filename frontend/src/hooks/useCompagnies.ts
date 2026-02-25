@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { companiesService } from '@/services/api'
-import type { Company, CompanyDetail, CompanyFilters, PaginatedResponse } from '@/types'
+import { companiesService } from '@/services/companies.service'
+import type { Company, CompanyDetail, CompanyFilters, PaginatedResponse } from '@/types/crm.types'
 
 export function useCompanies(initialFilters: CompanyFilters = {}) {
   const [data, setData]       = useState<PaginatedResponse<Company>>({
