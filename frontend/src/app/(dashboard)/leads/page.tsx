@@ -63,7 +63,7 @@ export default function LeadsPage() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Leads</h1>
+          <h1 className="text-xl font-bold text-gray-100">Leads</h1>
           <p className="text-sm text-gray-500">{leads.length} opportunités</p>
         </div>
         {isCommercial && (
