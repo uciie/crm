@@ -1,24 +1,31 @@
 'use client'
+// ============================================================
+// hooks/useAuth.ts
+// ============================================================
 
-import { useEffect, useState } from 'react'
-import { useRouter }           from 'next/navigation'
-import { createClient }        from '@/lib/supabase/client'
-import type { User }           from '@supabase/supabase-js'
-import type { Profile }        from '@/types'
+import { useEffect, useRef, useState } from 'react'
+import { useRouter }                   from 'next/navigation'
+import { createClient }                from '@/lib/supabase/client'
+import type { User }                   from '@supabase/supabase-js'
+import type { Profile }                from '@/types'
 
-// Client instancié une seule fois au niveau module — hors de tout composant/hook.
-// Cela garantit qu'il n'y a jamais deux instances simultanées,
-// même en React Strict Mode (double mount).
+// Singleton Supabase — une seule instance par session navigateur
 const supabase = createClient()
 
 export function useAuth() {
   const [user, setUser]       = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
-  const router                = useRouter()
+
+  // useRouter() est stable pour la navigation mais NE DOIT PAS
+  // être mis dans les deps d'un useEffect — sa référence change à chaque render
+  const router = useRouter()
+
+  // Ref pour éviter les setState après démontage
+  const mounted = useRef(true)
 
   useEffect(() => {
-    let mounted = true
+    mounted.current = true
 
     const loadProfile = async (userId: string) => {
       const { data, error } = await supabase
@@ -27,47 +34,67 @@ export function useAuth() {
         .eq('id', userId)
         .single()
 
+      if (!mounted.current) return
+
       if (error && error.code !== 'PGRST116') {
         console.warn('[useAuth] profil introuvable:', error.code, error.message)
       }
-      if (mounted) setProfile(data ?? null)
+
+      setProfile(data ?? null)
     }
 
     const init = async () => {
       try {
+        // getUser() valide le JWT côté serveur Supabase (plus fiable que getSession)
         const { data: { user: verifiedUser } } = await supabase.auth.getUser()
-        if (!mounted) return
+
+        if (!mounted.current) return
+
         setUser(verifiedUser)
-        if (verifiedUser) await loadProfile(verifiedUser.id)
+
+        if (verifiedUser) {
+          await loadProfile(verifiedUser.id)
+        }
       } catch (e) {
         console.error('[useAuth] init error:', e)
-        if (mounted) setUser(null)
+        if (mounted.current) setUser(null)
       } finally {
-        if (mounted) setLoading(false)
+        if (mounted.current) setLoading(false)
       }
     }
 
     void init()
 
+    // ── Listener sur les changements d'état auth ───────────────
+    // SIGN_IN, SIGN_OUT, TOKEN_REFRESHED, USER_UPDATED, etc.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (!mounted) return
+        if (!mounted.current) return
+
         const currentUser = session?.user ?? null
         setUser(currentUser)
+
         if (currentUser) {
           await loadProfile(currentUser.id)
         } else {
           setProfile(null)
         }
-        if (event === 'SIGNED_IN') router.refresh()
+
+        // router.refresh() resynchronise le cache RSC côté serveur
+        // après connexion — appelé via ref stable, pas en dépendance
+        if (event === 'SIGNED_IN') {
+          router.refresh()
+        }
       }
     )
 
+    // ── Nettoyage ──────────────────────────────────────────────
     return () => {
-      mounted = false
+      mounted.current = false
       subscription.unsubscribe()
     }
-  }, [router])
+
+  }, [])
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -91,8 +118,7 @@ export function useAuth() {
 
   const signOut = async () => {
     await supabase.auth.signOut()
-    setUser(null)
-    setProfile(null)
+    // onAuthStateChange va passer SIGNED_OUT et mettre user/profile à null
     router.push('/login')
     router.refresh()
   }
