@@ -4,12 +4,12 @@ import {
 } from 'drizzle-orm/pg-core'
 
 // Énumérations
-export const userRoleEnum = pgEnum('user_role', ['admin', 'commercial', 'utilisateur'])
-export const leadStatusEnum = pgEnum('lead_status', ['nouveau', 'contacté', 'qualifié', 'proposition', 'négociation', 'gagné', 'perdu'])
-export const taskStatusEnum = pgEnum('task_status', ['à_faire', 'en_cours', 'terminée', 'annulée'])
-export const taskPriorityEnum = pgEnum('task_priority', ['basse', 'moyenne', 'haute', 'urgente'])
-export const communicationTypeEnum = pgEnum('communication_type', ['email', 'appel', 'réunion', 'note', 'sms'])
-export const pipelineStageEnum = pgEnum('pipeline_stage', ['prospect', 'qualification', 'proposition', 'négociation', 'gagné', 'perdu'])
+export const userRoleEnum          = pgEnum('user_role',           ['admin', 'commercial', 'utilisateur'])
+export const leadStatusEnum        = pgEnum('lead_status',         ['nouveau', 'contacté', 'qualifié', 'proposition', 'négociation', 'gagné', 'perdu'])
+export const taskStatusEnum        = pgEnum('task_status',         ['à_faire', 'en_cours', 'terminée', 'annulée'])
+export const taskPriorityEnum      = pgEnum('task_priority',       ['basse', 'moyenne', 'haute', 'urgente'])
+export const communicationTypeEnum = pgEnum('communication_type',  ['email', 'appel', 'réunion', 'note', 'sms'])
+export const pipelineStageEnum     = pgEnum('pipeline_stage',      ['prospect', 'qualification', 'proposition', 'négociation', 'gagné', 'perdu'])
 
 // Table profiles
 export const profiles = pgTable('profiles', {
@@ -47,17 +47,30 @@ export const companies = pgTable('companies', {
 export const contacts = pgTable('contacts', {
   id:            uuid('id').primaryKey().defaultRandom(),
   first_name:    varchar('first_name', { length: 100 }).notNull(),
-  last_name:     varchar('last_name', { length: 100 }).notNull(),
-  email:         varchar('email', { length: 255 }).unique(),
-  phone:         varchar('phone', { length: 20 }),
-  mobile:        varchar('mobile', { length: 20 }),
-  job_title:     varchar('job_title', { length: 150 }),
+  last_name:     varchar('last_name',  { length: 100 }).notNull(),
+  email:         varchar('email',      { length: 255 }).unique(),
+  phone:         varchar('phone',      { length: 20 }),
+  mobile:        varchar('mobile',     { length: 20 }),
+  job_title:     varchar('job_title',  { length: 150 }),
   department:    varchar('department', { length: 100 }),
-  company_id:    uuid('company_id').references(() => companies.id),
+
+  // Fix #5 — ajout de .onDelete('set null') :
+  //   Avant : la suppression d'une entreprise levait une erreur FK ou laissait
+  //           le contact avec un company_id pointant vers une ligne inexistante.
+  //   Après : la suppression d'une entreprise met company_id à NULL sur tous
+  //           ses contacts (comportement attendu dans un CRM).
+  //
+  // ⚠️  Cette modification requiert une migration SQL :
+  //       ALTER TABLE contacts
+  //         DROP CONSTRAINT contacts_company_id_fkey,
+  //         ADD CONSTRAINT contacts_company_id_fkey
+  //           FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL;
+  company_id:    uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
+
   avatar_url:    text('avatar_url'),
   linkedin_url:  text('linkedin_url'),
   address:       text('address'),
-  city:          varchar('city', { length: 100 }),
+  city:          varchar('city',    { length: 100 }),
   country:       varchar('country', { length: 100 }).default('France'),
   is_subscribed: boolean('is_subscribed').default(true),
   notes:         text('notes'),
@@ -113,7 +126,7 @@ export const tasks = pgTable('tasks', {
   description:  text('description'),
   status:       taskStatusEnum('status').notNull().default('à_faire'),
   priority:     taskPriorityEnum('priority').notNull().default('moyenne'),
-  due_date:     timestamp('due_date', { withTimezone: true }),
+  due_date:     timestamp('due_date',     { withTimezone: true }),
   completed_at: timestamp('completed_at', { withTimezone: true }),
   contact_id:   uuid('contact_id').references(() => contacts.id),
   lead_id:      uuid('lead_id').references(() => leads.id),
@@ -133,7 +146,7 @@ export const communications = pgTable('communications', {
   direction:         varchar('direction', { length: 10 }),
   duration_min:      smallint('duration_min'),
   scheduled_at:      timestamp('scheduled_at', { withTimezone: true }),
-  occurred_at:       timestamp('occurred_at', { withTimezone: true }).defaultNow(),
+  occurred_at:       timestamp('occurred_at',  { withTimezone: true }).defaultNow(),
   contact_id:        uuid('contact_id').references(() => contacts.id),
   lead_id:           uuid('lead_id').references(() => leads.id),
   company_id:        uuid('company_id').references(() => companies.id),
@@ -145,15 +158,15 @@ export const communications = pgTable('communications', {
 // Table email_campaigns
 export const emailCampaigns = pgTable('email_campaigns', {
   id:                 uuid('id').primaryKey().defaultRandom(),
-  name:               varchar('name', { length: 255 }).notNull(),
+  name:               varchar('name',    { length: 255 }).notNull(),
   subject:            varchar('subject', { length: 255 }).notNull(),
   brevo_campaign_id:  integer('brevo_campaign_id'),
   status:             varchar('status', { length: 50 }).default('brouillon'),
   sent_count:         integer('sent_count').default(0),
-  open_rate:          decimal('open_rate', { precision: 5, scale: 2 }),
+  open_rate:          decimal('open_rate',  { precision: 5, scale: 2 }),
   click_rate:         decimal('click_rate', { precision: 5, scale: 2 }),
   scheduled_at:       timestamp('scheduled_at', { withTimezone: true }),
-  sent_at:            timestamp('sent_at', { withTimezone: true }),
+  sent_at:            timestamp('sent_at',       { withTimezone: true }),
   created_by:         uuid('created_by').references(() => profiles.id),
   created_at:         timestamp('created_at', { withTimezone: true }).defaultNow(),
   updated_at:         timestamp('updated_at', { withTimezone: true }).defaultNow(),

@@ -32,11 +32,24 @@ export class AuthService {
   // Client Supabase Admin (service_role) — uniquement côté serveur
   private supabaseAdmin;
 
+  /**
+   * FRONTEND_URL est lu depuis les variables d'environnement NestJS.
+   * Ne jamais utiliser window.location.origin ici — ce code s'exécute
+   * côté Node.js (pas dans un navigateur), window n'existe pas.
+   *
+   * Ajoutez dans votre .env :
+   *   FRONTEND_URL=https://votre-domaine.com
+   */
+  private readonly frontendUrl: string
+
   constructor(private readonly config: ConfigService) {
     this.supabaseAdmin = createClient(
       this.config.getOrThrow('SUPABASE_URL'),
       this.config.getOrThrow('SUPABASE_SERVICE_ROLE_KEY')
-    );
+    )
+
+    // Fix #3 — était window.location.origin (crash Node.js)
+    this.frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL')
   }
 
   // ── Récupère le profil complet d'un utilisateur ──────────
@@ -145,20 +158,12 @@ export class AuthService {
   // ── Invite un nouvel utilisateur via Supabase Admin API ──
 
   async inviteUser(email: string, fullName: string, role: 'commercial' | 'utilisateur') {
-    // Vérifie que l'email n'est pas déjà utilisé
-    const existing = await db
-      .select({ id: profiles.id })
-      .from(profiles)
-      .limit(1)
-    // Note : la vérification exacte se fait via Supabase auth.users
-
-    // Invitation via Supabase Admin (envoie un email d'invitation)
     const { data, error } = await this.supabaseAdmin.auth.admin.inviteUserByEmail(
       email,
       {
         data: { full_name: fullName },
-        // redirectTo : URL de la page d'acceptation d'invitation
-        redirectTo: `${window.location.origin}/auth/update-password`,
+        // Fix #3 — this.frontendUrl remplace window.location.origin (inexistant en Node.js)
+        redirectTo: `${this.frontendUrl}/auth/update-password`,
       }
     )
 
@@ -167,14 +172,13 @@ export class AuthService {
       if (process.env.NODE_ENV !== 'production') {
         this.logger.error(`Erreur invitation Supabase : ${error.message}`)
       } else {
-        // En production : log générique sans détails sensibles
-        this.logger.error(`Échec invitation pour un utilisateur — code: ${error.status ?? 'inconnu'}`)
+        this.logger.error(`Échec invitation — code: ${error.status ?? 'inconnu'}`)
       }
 
       if (error.message.includes('already registered')) {
         throw new ConflictException('Cet email est déjà enregistré.')
       }
-      throw new ConflictException(`Erreur lors de l'invitation.`) // ← message générique vers le client
+      throw new ConflictException(`Erreur lors de l'invitation.`)
     }
 
     // Crée le profil en base avec le rôle défini

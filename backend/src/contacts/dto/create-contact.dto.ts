@@ -1,19 +1,31 @@
 import {
   IsEmail, IsOptional, IsString, IsUUID,
-  IsBoolean, MaxLength, IsArray
+  IsBoolean, MaxLength, IsArray, IsNotEmpty
 } from 'class-validator'
 
+/**
+ * DTO de création d'un contact.
+ *
+ * Règles de validation :
+ *  - first_name / last_name : OBLIGATOIRES (contrainte métier CRM)
+ *  - email                  : OPTIONNEL mais UNIQUE en base (constraint SQL)
+ *                             → si fourni, doit être un email valide
+ *  - phone / mobile         : OPTIONNELS
+ */
 export class CreateContactDto {
   @IsString()
+  @IsNotEmpty({ message: 'Le prénom est obligatoire.' })
   @MaxLength(100)
   first_name: string
 
   @IsString()
+  @IsNotEmpty({ message: 'Le nom est obligatoire.' })
   @MaxLength(100)
   last_name: string
 
+  // Optionnel mais validé si présent (unicité gérée en base)
   @IsOptional()
-  @IsEmail()
+  @IsEmail({}, { message: 'Format d\'email invalide.' })
   email?: string
 
   @IsOptional()
@@ -33,7 +45,7 @@ export class CreateContactDto {
   department?: string
 
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4', { message: 'company_id doit être un UUID valide.' })
   company_id?: string
 
   @IsOptional()
@@ -66,6 +78,6 @@ export class CreateContactDto {
   notes?: string
 
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4', { message: 'assigned_to doit être un UUID valide.' })
   assigned_to?: string
 }

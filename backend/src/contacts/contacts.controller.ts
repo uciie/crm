@@ -3,11 +3,11 @@ import {
   Param, Body, Query, UseGuards, Request,
   ParseUUIDPipe, HttpCode, HttpStatus
 } from '@nestjs/common'
-import { JwtAuthGuard } from '../auth/jwt-auth.guard'
+import { JwtAuthGuard }      from '../auth/jwt-auth.guard'
 import { RolesGuard, Roles } from '../auth/roles.guard'
-import { ContactsService } from './contacts.service';
-import type { ContactFilters } from './contacts.service';
-import { CreateContactDto } from './dto/create-contact.dto'
+import { ContactsService }   from './contacts.service'
+import { CreateContactDto }  from './dto/create-contact.dto'
+import { ContactFiltersDto } from './dto/contact-filters.dto'  // ← nouveau DTO validé
 
 @Controller('contacts')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -15,10 +15,11 @@ export class ContactsController {
   constructor(private readonly contactsService: ContactsService) {}
 
   // GET /contacts?search=&company_id=&page=1&limit=20
+  // Les query params sont désormais validés et transformés par ContactFiltersDto
   @Get()
   findAll(
     @Request() req: any,
-    @Query() filters: ContactFilters,
+    @Query() filters: ContactFiltersDto,  // ← remplace l'ancien ContactFilters non validé
   ) {
     return this.contactsService.findAll(req.user, filters)
   }

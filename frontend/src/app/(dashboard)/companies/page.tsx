@@ -30,14 +30,19 @@ interface Pagination {
 }
 
 export default function CompaniesPage() {
-  const router            = useRouter()
-  const { isCommercial }  = useAuth()
-  const [companies, setCompanies]   = useState<Company[]>([])
-  const [pagination, setPagination] = useState<Pagination>({ page: 1, totalPages: 1, total: 0 })
-  const [loading, setLoading]       = useState(true)
-  const [showForm, setShowForm]     = useState(false)
+  const router = useRouter()
+
+  // Fix #4 — isAdmin et isCommercial sont extraits ICI, au niveau du composant,
+  // et non plus à l'intérieur d'un .map() ce qui violait la règle des Hooks React
+  // ("don't call Hooks inside loops, conditions or nested functions").
+  const { isCommercial, isAdmin } = useAuth()
+
+  const [companies, setCompanies]     = useState<Company[]>([])
+  const [pagination, setPagination]   = useState<Pagination>({ page: 1, totalPages: 1, total: 0 })
+  const [loading, setLoading]         = useState(true)
+  const [showForm, setShowForm]       = useState(false)
   const [editCompany, setEditCompany] = useState<Company | null>(null)
-  const [filters, setFilters]       = useState({ search: '', page: 1, limit: 20 })
+  const [filters, setFilters]         = useState({ search: '', page: 1, limit: 20 })
 
   const fetchCompanies = useCallback(async () => {
     setLoading(true)
@@ -143,6 +148,8 @@ export default function CompaniesPage() {
                       : '—'
                     }
                   </td>
+                  {/* Fix #4 — isAdmin est désormais une variable locale au composant,
+                      pas un appel de Hook à l'intérieur du .map() */}
                   <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
                     {isCommercial && (
                       <button
@@ -152,7 +159,7 @@ export default function CompaniesPage() {
                         Modifier
                       </button>
                     )}
-                    {useAuth().isAdmin && (
+                    {isAdmin && (
                       <button
                         onClick={() => handleDelete(company.id)}
                         className="text-red-500 hover:text-red-700 text-sm"

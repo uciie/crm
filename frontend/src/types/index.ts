@@ -33,6 +33,20 @@ export interface Company {
   updated_at:     string
 }
 
+export interface CompanyDetail extends Company {
+  contacts: ContactSummary[]
+}
+
+export interface ContactSummary {
+  id:         string
+  first_name: string
+  last_name:  string
+  email?:     string
+  job_title?: string
+  phone?:     string
+  avatar_url?: string
+}
+
 export interface Contact {
   id:            string
   first_name:    string
@@ -56,7 +70,47 @@ export interface Contact {
   updated_at:    string
   // Relations (jointures)
   company?:      { id: string; name: string; logo_url?: string }
-  assignee?:     { id: string; full_name: string; avatar_url?: string }
+  assigned_to_profile?: { id: string; full_name: string; avatar_url?: string }
+}
+
+export interface ContactDetail {
+  contacts: {
+    id:            string
+    first_name:    string
+    last_name:     string
+    email?:        string
+    phone?:        string
+    mobile?:       string
+    job_title?:    string
+    department?:   string
+    linkedin_url?: string
+    address?:      string
+    city?:         string
+    country?:      string
+    is_subscribed: boolean
+    notes?:        string
+    avatar_url?:   string
+    created_at:    string
+    updated_at:    string
+  }
+  companies: {
+    id:       string
+    name:     string
+    logo_url?: string
+    industry?: string
+    website?:  string
+  } | null
+}
+
+export interface Interaction {
+  id:          string
+  type:        'email' | 'appel' | 'réunion' | 'note' | 'sms'
+  subject?:    string
+  body?:       string
+  direction?:  'entrant' | 'sortant'
+  duration_min?: number
+  occurred_at: string
+  author?:     { full_name: string; avatar_url?: string }
 }
 
 export type LeadStatus =
