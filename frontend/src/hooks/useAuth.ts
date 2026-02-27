@@ -83,6 +83,7 @@ export function useAuth() {
         // router.refresh() resynchronise le cache RSC côté serveur
         // après connexion — appelé via ref stable, pas en dépendance
         if (event === 'SIGNED_IN') {
+          console.log('[useAuth] utilisateur connecté:', currentUser)
           router.refresh()
         }
       }

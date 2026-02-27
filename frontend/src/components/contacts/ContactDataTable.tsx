@@ -89,7 +89,7 @@ export function ContactsDataTable({
 }: ContactsDataTableProps) {
   const router               = useRouter()
   const { toast }            = useToast()
-  const { isAdmin, isCommercial } = useAuth()
+  const { isAdmin, isCommercial, loading: authLoading } = useAuth()
 
   // État données
   const [contacts, setContacts]     = useState<Contact[]>([])
@@ -113,12 +113,14 @@ export function ContactsDataTable({
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout>>()
 
-  // Chargement des options d'entreprises une seule fois
+  // Chargement des options d'entreprises — seulement après que le token soit prêt
   useEffect(() => {
+    if (authLoading) return
     companiesService.listOptions().then(setCompanies).catch(() => {})
-  }, [])
+  }, [authLoading])
 
   const fetchContacts = useCallback(async () => {
+    if (authLoading) return  // token pas encore prêt → on n'envoie rien
     setLoading(true)
     try {
       const filters: ContactFilters = {
@@ -136,7 +138,7 @@ export function ContactsDataTable({
     } finally {
       setLoading(false)
     }
-  }, [search, filterCompany, filterSubscribed, page, toast, refreshKey])
+  }, [search, filterCompany, filterSubscribed, page, toast, refreshKey, authLoading])
 
   useEffect(() => {
     fetchContacts()

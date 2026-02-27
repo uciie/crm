@@ -21,6 +21,10 @@ export class ContactsController {
     @Request() req: any,
     @Query() filters: ContactFiltersDto,  // ← remplace l'ancien ContactFilters non validé
   ) {
+    console.log('Filtres reçus:', filters)  // Log pour vérifier les filtres
+    console.log('Utilisateur:', req.user)   // Log pour vérifier l'utilisateur authentifié
+    console.log('Cookies dans la requête:', req.headers.cookie)  // Log pour vérifier les cookies
+    console.log('Resultat de findAll:', this.contactsService.findAll(req.user, filters))  // Log pour vérifier le résultat de findAll
     return this.contactsService.findAll(req.user, filters)
   }
 
