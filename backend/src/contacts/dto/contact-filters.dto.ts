@@ -1,55 +1,60 @@
 import {
-  IsOptional, IsString, IsUUID, IsBoolean,
-  IsInt, Min, Max
+  IsOptional, IsString, IsUUID, IsInt, Min, Max, IsIn
 } from 'class-validator'
 import { Transform, Type } from 'class-transformer'
 
 /**
  * DTO de filtrage et pagination pour GET /contacts.
  *
- * Avant ce DTO, les paramètres de @Query() arrivaient en string brute
- * sans aucune validation côté NestJS. Ce DTO, couplé au ValidationPipe
- * global (transform: true dans main.ts), corrige cela.
+ * FIX : @IsBoolean() rejetait silencieusement `false` avec whitelist:true
+ * → remplacé par @IsIn([true, false]) qui accepte les deux valeurs booléennes.
+ *
+ * Le @Transform convertit les strings 'true'/'false' en boolean AVANT la
+ * validation, ce qui est nécessaire car les query params HTTP sont toujours
+ * des strings.
  */
 export class ContactFiltersDto {
-  /** Recherche textuelle (nom, email, poste) via ILIKE */
   @IsOptional()
   @IsString()
   search?: string
 
-  /** Filtrer par entreprise */
   @IsOptional()
   @IsUUID('4', { message: 'company_id doit être un UUID valide.' })
   company_id?: string
 
-  /** Filtrer par commercial assigné */
   @IsOptional()
   @IsUUID('4', { message: 'assigned_to doit être un UUID valide.' })
   assigned_to?: string
 
-  /** Filtrer par statut d'abonnement email */
+  /**
+   * FIX PRINCIPAL — enableImplicitConversion: true dans main.ts transforme
+   * la string "false" en booléen true (Boolean("false") === true en JS).
+   *
+   * Solution : { toClassOnly: true } + String(value) pour court-circuiter
+   * la conversion implicite et parser manuellement depuis la valeur brute.
+   */
   @IsOptional()
   @Transform(({ value }) => {
-    if (value === 'true')  return true
-    if (value === 'false') return false
-    return value
-  })
-  @IsBoolean({ message: 'is_subscribed doit être true ou false.' })
+    const raw = String(value).trim().toLowerCase()
+    if (raw === 'true')  return true
+    if (raw === 'false') return false
+    if (value === true)  return true
+    if (value === false) return false
+    return undefined
+  }, { toClassOnly: true })
+  @IsIn([true, false, undefined], { message: 'is_subscribed doit être true ou false.' })
   is_subscribed?: boolean
 
-  /** Filtrer par ville */
   @IsOptional()
   @IsString()
   city?: string
 
-  /** Numéro de page (≥ 1) */
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number = 1
 
-  /** Nombre d'éléments par page (1–100) */
   @IsOptional()
   @Type(() => Number)
   @IsInt()

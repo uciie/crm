@@ -122,14 +122,16 @@ export function ContactsDataTable({
   const fetchContacts = useCallback(async () => {
     if (authLoading) return  // token pas encore prêt → on n'envoie rien
     setLoading(true)
+    console.log('fetchContacts avec filtres:', { search, filterCompany, filterSubscribed, page })
     try {
       const filters: ContactFilters = {
         search:       search || undefined,
         company_id:   filterCompany || undefined,
-        is_subscribed: filterSubscribed !== '' ? filterSubscribed === 'true' : undefined,
+        is_subscribed: filterSubscribed === '' ? undefined : filterSubscribed === 'true',
         page,
         limit:        20,
       }
+      console.log('Envoi des filtres au service:', filters)
       const data = await contactsService.list(filters)
       setContacts(data.data)
       setPagination(data.pagination)

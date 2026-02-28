@@ -36,8 +36,8 @@ interface SupabaseJwtPayload {
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(private readonly config: ConfigService) {
     // Pour HS256, on récupère le secret brut sans transformations complexes
-    const secretOrKey = config.getOrThrow<string>('SUPABASE_JWT_PUBLIC_KEY')
-
+      const secretOrKey = "v7waA5zAu0x03b/EWqAhjVlCOCTBoRZxYWYshZ2IL3670cJxCMZ3378Q37vhj7i9+07lmW/5UPY9jedVRRE1qw=="
+      console.log('[jwt.strategy] Using SUPABASE_SERVICE_ROLE_KEY for HS256 validation')
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
@@ -54,6 +54,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if (!payload.sub) {
       throw new UnauthorizedException('Token invalide : subject manquant')
     }
+    console.log('[jwt.strategy] Payload JWT validé:', payload)
 
     // Charge le profil depuis Neon pour obtenir le rôle CRM et is_active
     const [profile] = await db
@@ -66,18 +67,20 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       .from(profiles)
       .where(eq(profiles.id, payload.sub))
       .limit(1)
+    console.log('[jwt.strategy] Profil chargé depuis DB:', profile)
 
     if (!profile) {
       throw new UnauthorizedException(
         'Profil introuvable. Le compte a peut-être été supprimé.'
       )
     }
-
+    console.log(`[jwt.strategy] Profil trouvé : id=${profile.id}, role=${profile.role}, is_active=${profile.is_active}`)
     if (!profile.is_active) {
       throw new UnauthorizedException(
         'Compte désactivé. Contactez votre administrateur.'
       )
     }
+    console.log('[jwt.strategy] Profil actif, authentification réussie.')
 
     return {
       id:        profile.id,

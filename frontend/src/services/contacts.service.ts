@@ -34,6 +34,8 @@ export const contactsService = {
    */
   async list(filters: ContactFilters = {}): Promise<PaginatedResponse<Contact>> {
     const params = buildContactParams(filters)
+    console.log('Appel à contactsService.list avec filtres:', filters)
+    console.log('Paramètres de requête construits:', params.toString())
     return api.get<PaginatedResponse<Contact>>(`/contacts?${params}`)
   },
 

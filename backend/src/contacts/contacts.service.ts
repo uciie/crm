@@ -18,6 +18,7 @@ export interface ContactFilters {
 @Injectable()
 export class ContactsService {
   async findAll(user: AuthUser, filters: ContactFilters = {}) {
+    console.log('filters dans service:', filters)
     const { search, company_id, assigned_to, is_subscribed, city, page = 1, limit = 20 } = filters
     const offset = (page - 1) * limit
 
@@ -49,8 +50,9 @@ export class ContactsService {
     if (company_id)    conditions.push(eq(contacts.company_id, company_id))
     if (assigned_to)   conditions.push(eq(contacts.assigned_to, assigned_to))
     if (city)          conditions.push(ilike(contacts.city, `%${city}%`))
-    if (is_subscribed !== undefined) {
-      conditions.push(eq(contacts.is_subscribed, is_subscribed))
+      console.log('is_subscribed dans service:', is_subscribed)
+    if (is_subscribed !== undefined && is_subscribed !== null) {
+      conditions.push(eq(contacts.is_subscribed, is_subscribed === true))
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined

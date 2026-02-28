@@ -127,5 +127,9 @@ export function useAuth() {
   const isAdmin      = profile?.role === 'admin'
   const isCommercial = profile?.role === 'commercial' || isAdmin
 
+  //console.log('[useAuth] user:', user, 'profile:', profile, 'loading:', loading)
+  //console.log('[useAuth] isAdmin:', isAdmin, 'isCommercial:', isCommercial)
+  //console.log('iscommercial:', profile?.role === 'commercial' || isAdmin)
+
   return { user, profile, loading, isAdmin, isCommercial, signIn, signUp, signOut }
 }
