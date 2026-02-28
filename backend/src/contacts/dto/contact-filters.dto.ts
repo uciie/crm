@@ -27,22 +27,20 @@ export class ContactFiltersDto {
   assigned_to?: string
 
   /**
-   * FIX PRINCIPAL — enableImplicitConversion: true dans main.ts transforme
-   * la string "false" en booléen true (Boolean("false") === true en JS).
-   *
-   * Solution : { toClassOnly: true } + String(value) pour court-circuiter
-   * la conversion implicite et parser manuellement depuis la valeur brute.
+   * FIX : on reçoit la valeur brute via le getter ci-dessous.
+   * Le @Transform utilise `obj` (l'objet source brut) pour lire
+   * directement depuis la query string avant toute conversion.
    */
   @IsOptional()
-  @Transform(({ value }) => {
-    const raw = String(value).trim().toLowerCase()
-    if (raw === 'true')  return true
-    if (raw === 'false') return false
-    if (value === true)  return true
-    if (value === false) return false
+  @Transform(({ obj }) => {
+    // obj est l'objet source (les query params bruts)
+    // On lit directement la valeur string depuis obj, pas depuis value
+    // car value a déjà été convertie par enableImplicitConversion
+    const raw = obj?.is_subscribed
+    if (raw === 'true'  || raw === true)  return true
+    if (raw === 'false' || raw === false) return false
     return undefined
-  }, { toClassOnly: true })
-  @IsIn([true, false, undefined], { message: 'is_subscribed doit être true ou false.' })
+  })
   is_subscribed?: boolean
 
   @IsOptional()
