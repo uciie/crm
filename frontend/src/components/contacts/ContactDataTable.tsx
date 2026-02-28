@@ -22,7 +22,8 @@ import {
   Trash2,
   CheckCircle2,
   XCircle,
-  MoreHorizontal,
+  ArrowUpRight,
+  Loader2,
 } from 'lucide-react'
 import { contactsService }    from '@/services/contacts.service'
 import { companiesService }   from '@/services/companies.service'
@@ -80,6 +81,38 @@ function ContactAvatar({ contact }: { contact: Contact }) {
   )
 }
 
+// ── Tooltip ───────────────────────────────────────────────────
+
+interface TooltipProps {
+  label:     string
+  children:  React.ReactNode
+  position?: 'top' | 'bottom'
+}
+
+function Tooltip({ label, children, position = 'top' }: TooltipProps) {
+  return (
+    <div className="relative group/tip inline-flex">
+      {children}
+      <div
+        className={[
+          'pointer-events-none absolute left-1/2 -translate-x-1/2 z-50',
+          'opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 delay-100',
+          position === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
+        ].join(' ')}
+      >
+        <div className="bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-bold tracking-[0.15em] uppercase px-2.5 py-1.5 whitespace-nowrap shadow-xl shadow-black/40">
+          {label}
+        </div>
+        {position === 'top' ? (
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-700" />
+        ) : (
+          <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-slate-700" />
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── Composant principal ───────────────────────────────────────
 
 export function ContactsDataTable({
@@ -102,8 +135,6 @@ export function ContactsDataTable({
   // État UI
   const [showFilters, setShowFilters] = useState(false)
   const [deletingId, setDeletingId]   = useState<string | null>(null)
-  const [openMenuId, setOpenMenuId]   = useState<string | null>(null)
-
   // Filtres
   const [search, setSearch]                   = useState('')
   const [filterCompany, setFilterCompany]     = useState('')
@@ -479,43 +510,44 @@ export function ContactsDataTable({
                       className="px-5 py-3.5 text-right"
                       onClick={e => e.stopPropagation()}
                     >
-                      <div className="relative">
-                        <button
-                          onClick={() => setOpenMenuId(v => v === contact.id ? null : contact.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-all"
-                          aria-label="Actions"
-                        >
-                          <MoreHorizontal className="w-4 h-4" />
-                        </button>
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                        {/* Ouvrir le détail */}
+                        <Tooltip label="Ouvrir">
+                          <button
+                            onClick={() => router.push(`/contacts/${contact.id}`)}
+                            className="p-1.5 text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-all"
+                            aria-label={`Ouvrir ${contact.first_name} ${contact.last_name}`}
+                          >
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                          </button>
+                        </Tooltip>
 
-                        {openMenuId === contact.id && (
-                          <>
-                            <div
-                              className="fixed inset-0 z-10"
-                              onClick={() => setOpenMenuId(null)}
-                            />
-                            <div className="absolute right-0 top-8 z-20 w-40 bg-slate-900 border border-slate-700 shadow-2xl shadow-black/50">
-                              {isCommercial && (
-                                <button
-                                  onClick={() => { setOpenMenuId(null); onEditClick(contact) }}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition-colors text-left"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                  Modifier
-                                </button>
-                              )}
-                              {isAdmin && (
-                                <button
-                                  onClick={() => { setOpenMenuId(null); handleDelete(contact) }}
-                                  disabled={deletingId === contact.id}
-                                  className="w-full flex items-center gap-2.5 px-3 py-2.5 text-xs text-red-400 hover:bg-red-950/30 hover:text-red-300 transition-colors text-left disabled:opacity-50"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                  {deletingId === contact.id ? 'Suppression...' : 'Supprimer'}
-                                </button>
-                              )}
-                            </div>
-                          </>
+                        {isCommercial && (
+                          <Tooltip label="Modifier">
+                            <button
+                              onClick={() => onEditClick(contact)}
+                              className="p-1.5 text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-all"
+                              aria-label={`Modifier ${contact.first_name} ${contact.last_name}`}
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          </Tooltip>
+                        )}
+
+                        {isAdmin && (
+                          <Tooltip label="Supprimer">
+                            <button
+                              onClick={() => handleDelete(contact)}
+                              disabled={deletingId === contact.id}
+                              className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-950/30 transition-all disabled:opacity-40"
+                              aria-label={`Supprimer ${contact.first_name} ${contact.last_name}`}
+                            >
+                              {deletingId === contact.id
+                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
+                                : <Trash2 className="w-3.5 h-3.5" />
+                              }
+                            </button>
+                          </Tooltip>
                         )}
                       </div>
                     </td>
