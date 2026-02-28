@@ -1,14 +1,17 @@
-import { drizzle } from 'drizzle-orm/node-postgres'
-import { Pool }    from 'pg'
-import * as schema from './schema'
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import * as schema from './schema';
+import * as dotenv from 'dotenv';
 
-// Supabase fournit une DATABASE_URL au format :
-// postgresql://postgres:[PASSWORD]@db.[PROJECT_REF].supabase.co:5432/postgres
+// Force le chargement du .env avant d'utiliser DATABASE_URL
+dotenv.config();
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }, // requis pour Supabase
-  max: 10,
-  idleTimeoutMillis: 30000,
-})
+  // TRÈS IMPORTANT : Supabase nécessite SSL pour les connexions externes
+  ssl: {
+    rejectUnauthorized: false,
+  },
+});
 
-export const db = drizzle(pool, { schema })
+export const db = drizzle(pool, { schema });

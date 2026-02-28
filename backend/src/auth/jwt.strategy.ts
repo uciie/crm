@@ -35,11 +35,14 @@ interface SupabaseJwtPayload {
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(private readonly config: ConfigService) {
+    // Pour HS256, on récupère le secret brut sans transformations complexes
+    const secretOrKey = config.getOrThrow<string>('SUPABASE_JWT_PUBLIC_KEY')
+
     super({
-      jwtFromRequest:   ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey:      config.getOrThrow<string>('SUPABASE_JWT_PUBLIC_KEY'),
-      algorithms:       ['ES256'], 
+      secretOrKey: secretOrKey,
+      algorithms: ['HS256'], // MODIFICATION ICI : remplacez ES256 par HS256
     })
   }
 

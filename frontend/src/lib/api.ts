@@ -4,82 +4,103 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001'
 
 const supabase = createClient()
 
-// ══════════════════════════════════════════════════════════════
-// Lit le token depuis le cookie sb-*-auth-token directement.
-// @supabase/ssr stocke le JWT en cookie accessible côté JS
-// (pas HttpOnly quand posé par createBrowserClient côté client).
-// On essaie d'abord getSession() qui lit ce cookie, puis fallback
-// sur une lecture manuelle du cookie en cas d'échec.
-// ══════════════════════════════════════════════════════════════
+// ── Extraction du JWT depuis les cookies Supabase ─────────────
+// @supabase/ssr peut nommer le cookie de plusieurs façons :
+//   - sb-<ref>-auth-token        → valeur JSON  {"access_token":"eyJ..."}
+//   - sb-<ref>-auth-tokenbase64  → valeur "base64-eyJ..." (base64url du JSON)
+//   - sb-<ref>-auth-token.0      → chunk 0 si cookie trop long
 function getTokenFromCookie(): string | null {
   if (typeof document === 'undefined') return null
 
-  // Format du cookie : sb-[project-ref]-auth-token=base64url...
-  // Peut être splitté en .0 et .1 si trop long
-  const cookies = document.cookie.split(';').map(c => c.trim())
+  const all = document.cookie.split(';').map(c => c.trim())
 
-  // Cherche le cookie principal (non splitté)
-  const main = cookies.find(c => c.match(/^sb-.+-auth-token=/) && !c.includes('.0') && !c.includes('.1'))
-  if (main) {
-    try {
-      const value = decodeURIComponent(main.split('=').slice(1).join('='))
-      const parsed = JSON.parse(value)
-      return parsed.access_token ?? null
-    } catch {}
+  // Trouve le premier cookie dont le nom commence par sb- et contient auth-token
+  const authCookie = all.find(c => {
+    const name = c.split('=')[0].trim()
+    return name.startsWith('sb-') && name.includes('auth-token')
+  })
+
+  if (!authCookie) {
+    console.warn('[api] Cookie sb-*auth-token* introuvable. Noms disponibles:',
+      all.map(c => c.split('=')[0].trim()).filter(n => n.startsWith('sb-'))
+    )
+    return null
   }
 
-  // Cookie splitté en chunks .0 + .1
-  const chunk0 = cookies.find(c => c.match(/^sb-.+-auth-token\.0=/))
-  const chunk1 = cookies.find(c => c.match(/^sb-.+-auth-token\.1=/))
-  if (chunk0) {
+  const rawValue = authCookie.split('=').slice(1).join('=').trim()
+
+  // Format 1 : "base64-<base64url>" → décoder le base64
+  if (rawValue.startsWith('base64-')) {
     try {
-      const raw = decodeURIComponent(chunk0.split('=').slice(1).join('='))
-          + (chunk1 ? decodeURIComponent(chunk1.split('=').slice(1).join('=')) : '')
-      const parsed = JSON.parse(raw)
-      return parsed.access_token ?? null
-    } catch {}
+      const b64 = rawValue.slice(7) // retire "base64-"
+      const json = atob(b64)
+      const parsed = JSON.parse(json)
+      if (parsed.access_token) {
+        console.log('[api] Token extrait depuis cookie base64')
+        return parsed.access_token
+      }
+    } catch (e) {
+      console.error('[api] Erreur décodage base64:', e)
+    }
   }
 
+  // Format 2 : URL-encodé → décoder puis parser JSON
+  try {
+    const decoded = decodeURIComponent(rawValue)
+    const parsed  = JSON.parse(decoded)
+    if (parsed.access_token) {
+      console.log('[api] Token extrait depuis cookie JSON')
+      return parsed.access_token
+    }
+  } catch {}
+
+  // Format 3 : le cookie EST directement le JWT (commence par eyJ)
+  if (rawValue.startsWith('eyJ')) {
+    console.log('[api] Token extrait directement depuis cookie')
+    return rawValue
+  }
+
+  console.warn('[api] Cookie trouvé mais format non reconnu. Début:', rawValue.slice(0, 60))
   return null
 }
 
 async function getAuthHeaders(): Promise<HeadersInit> {
-  const supabase = createClient();
-  
-  // 1. On tente via la méthode officielle
-  const { data } = await supabase.auth.getSession();
-  let token = data.session?.access_token;
+  const base = { 'Content-Type': 'application/json' }
 
-  // 2. Fallback : Si Supabase ne voit rien, on cherche manuellement dans les cookies
-  if (!token && typeof document !== 'undefined') {
-    const name = "sb-" + process.env.NEXT_PUBLIC_SUPABASE_PROJECT_ID + "-auth-token";
-    const cookie = document.cookie.split('; ').find(row => row.startsWith(name + '='));
-    if (cookie) {
-      try {
-        const val = decodeURIComponent(cookie.split('=')[1]);
-        // Supabase stocke parfois le token dans un JSON dans le cookie
-        const parsed = JSON.parse(val);
-        token = Array.isArray(parsed) ? parsed[0] : parsed.access_token;
-      } catch (e) {
-        console.error("Erreur parse cookie auth", e);
-      }
+  // Priorité 1 : lecture directe du cookie (fiable indépendamment du SDK)
+  const cookieToken = getTokenFromCookie()
+  if (cookieToken) {
+    return { ...base, 'Authorization': `Bearer ${cookieToken}` }
+  }
+
+  // Priorité 2 : getSession() via le SDK Supabase
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      console.log('[api] Token obtenu via getSession()')
+      return { ...base, 'Authorization': `Bearer ${session.access_token}` }
     }
+  } catch (e) {
+    console.error('[api] getSession() error:', e)
   }
 
-  if (!token) {
-    throw new Error('401: Session expirée ou token invalide');
+  // Priorité 3 : refresh explicite
+  try {
+    const { data: { session: refreshed } } = await supabase.auth.refreshSession()
+    if (refreshed?.access_token) {
+      console.warn('[api] Session rafraîchie')
+      return { ...base, 'Authorization': `Bearer ${refreshed.access_token}` }
+    }
+  } catch (e) {
+    console.error('[api] refreshSession() error:', e)
   }
 
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`,
-  };
+  console.error('[api] Aucun token disponible — requête envoyée sans Authorization')
+  return base
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (res.status === 401) {
-    // NE PAS rediriger ici — le middleware Next.js gère la navigation
-    // Une redirection manuelle ici cause la boucle login→dashboard→login
     throw new Error('401: Session expirée ou token invalide')
   }
 
@@ -102,9 +123,6 @@ export const api = {
     const res = await fetch(`${BASE_URL}/api/v1${path}`, {
       headers: await getAuthHeaders(),
     })
-    console.log(`[api] GET ${getAuthHeaders()}`)
-    console.log(`[api] GET ${path} - Status: ${res.status}`)
-
     return handleResponse<T>(res)
   },
 
