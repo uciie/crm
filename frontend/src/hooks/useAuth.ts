@@ -6,10 +6,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter }                   from 'next/navigation'
 import { createClient }                from '@/lib/supabase/client'
+import { useAuthStore }                from '@/store/authStore'
 import type { User }                   from '@supabase/supabase-js'
 import type { Profile }                from '@/types'
 
-// Singleton Supabase — une seule instance par session navigateur
 const supabase = createClient()
 
 export function useAuth() {
@@ -17,12 +17,11 @@ export function useAuth() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // useRouter() est stable pour la navigation mais NE DOIT PAS
-  // être mis dans les deps d'un useEffect — sa référence change à chaque render
-  const router = useRouter()
+  const router   = useRouter()
+  const mounted  = useRef(true)
 
-  // Ref pour éviter les setState après démontage
-  const mounted = useRef(true)
+  // Acces au store Zustand pour la reinitialisation lors du logout
+  const clearAuth = useAuthStore(state => state.clearAuth)
 
   useEffect(() => {
     mounted.current = true
@@ -45,7 +44,6 @@ export function useAuth() {
 
     const init = async () => {
       try {
-        // getUser() valide le JWT côté serveur Supabase (plus fiable que getSession)
         const { data: { user: verifiedUser } } = await supabase.auth.getUser()
 
         if (!mounted.current) return
@@ -65,8 +63,6 @@ export function useAuth() {
 
     void init()
 
-    // ── Listener sur les changements d'état auth ───────────────
-    // SIGN_IN, SIGN_OUT, TOKEN_REFRESHED, USER_UPDATED, etc.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted.current) return
@@ -80,21 +76,16 @@ export function useAuth() {
           setProfile(null)
         }
 
-        // router.refresh() resynchronise le cache RSC côté serveur
-        // après connexion — appelé via ref stable, pas en dépendance
         if (event === 'SIGNED_IN') {
-          console.log('[useAuth] utilisateur connecté:', currentUser)
           router.refresh()
         }
       }
     )
 
-    // ── Nettoyage ──────────────────────────────────────────────
     return () => {
       mounted.current = false
       subscription.unsubscribe()
     }
-
   }, [])
 
   const signIn = async (email: string, password: string) => {
@@ -119,17 +110,16 @@ export function useAuth() {
 
   const signOut = async () => {
     await supabase.auth.signOut()
-    // onAuthStateChange va passer SIGNED_OUT et mettre user/profile à null
+
+    // Reinitialisation du store Zustand — evite un profil perime en cache
+    clearAuth()
+
     router.push('/login')
     router.refresh()
   }
 
   const isAdmin      = profile?.role === 'admin'
   const isCommercial = profile?.role === 'commercial' || isAdmin
-
-  //console.log('[useAuth] user:', user, 'profile:', profile, 'loading:', loading)
-  //console.log('[useAuth] isAdmin:', isAdmin, 'isCommercial:', isCommercial)
-  //console.log('iscommercial:', profile?.role === 'commercial' || isAdmin)
 
   return { user, profile, loading, isAdmin, isCommercial, signIn, signUp, signOut }
 }

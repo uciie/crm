@@ -29,17 +29,8 @@ export class UpdateUserRoleDto {
 export class AuthService {
   private readonly logger = new Logger(AuthService.name)
 
-  // Client Supabase Admin (service_role) — uniquement côté serveur
   private supabaseAdmin;
 
-  /**
-   * FRONTEND_URL est lu depuis les variables d'environnement NestJS.
-   * Ne jamais utiliser window.location.origin ici — ce code s'exécute
-   * côté Node.js (pas dans un navigateur), window n'existe pas.
-   *
-   * Ajoutez dans votre .env :
-   *   FRONTEND_URL=https://votre-domaine.com
-   */
   private readonly frontendUrl: string
 
   constructor(private readonly config: ConfigService) {
@@ -48,7 +39,6 @@ export class AuthService {
       this.config.getOrThrow('SUPABASE_SERVICE_ROLE_KEY')
     )
 
-    // Fix #3 — était window.location.origin (crash Node.js)
     this.frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL')
   }
 
@@ -104,7 +94,6 @@ export class AuthService {
     targetUserId: string,
     newRole: 'admin' | 'commercial' | 'utilisateur',
   ) {
-    // Empêche un admin de se rétrograder lui-même
     if (requesterId === targetUserId) {
       throw new ForbiddenException(
         'Vous ne pouvez pas modifier votre propre rôle.'
@@ -162,13 +151,17 @@ export class AuthService {
       email,
       {
         data: { full_name: fullName },
-        // Fix #3 — this.frontendUrl remplace window.location.origin (inexistant en Node.js)
-        redirectTo: `${this.frontendUrl}/auth/update-password`,
+        // FIX : l'ancienne valeur `/auth/update-password` bypassait le callback
+        // et atterrissait sur une page Next.js sans session établie (pas de cookies).
+        // On passe maintenant par /auth/callback?next=/update-password :
+        // → le callback échange le code PKCE contre une session complète
+        // → pose les cookies sb-* via setAll()
+        // → redirige ensuite vers /update-password avec une session valide
+        redirectTo: `${this.frontendUrl}/auth/callback?next=/update-password`,
       }
     )
 
     if (error) {
-      // Log technique détaillé UNIQUEMENT en développement
       if (process.env.NODE_ENV !== 'production') {
         this.logger.error(`Erreur invitation Supabase : ${error.message}`)
       } else {
@@ -181,8 +174,6 @@ export class AuthService {
       throw new ConflictException(`Erreur lors de l'invitation.`)
     }
 
-    // Crée le profil en base avec le rôle défini
-    // (le trigger SQL le crée aussi, mais on force le rôle ici)
     if (data.user) {
       await db
         .insert(profiles)
@@ -214,7 +205,6 @@ export class AuthService {
       )
     }
 
-    // Suppression dans Supabase Auth (cascade sur profiles grâce à ON DELETE CASCADE)
     const { error } = await this.supabaseAdmin.auth.admin.deleteUser(targetUserId)
 
     if (error) {

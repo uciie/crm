@@ -4,6 +4,7 @@ import { useState }      from 'react'
 import { useForm }       from 'react-hook-form'
 import { zodResolver }   from '@hookform/resolvers/zod'
 import { useRouter }     from 'next/navigation'
+import { Lock, KeyRound } from 'lucide-react'
 import { AuthLayout }    from '@/components/auth/AuthLayout'
 import {
   PasswordInput,
@@ -51,8 +52,10 @@ export default function UpdatePasswordPage() {
         {serverError && <AuthAlert type="error" message={serverError} />}
 
         <div className="space-y-3">
+          {/* Prop icon={Lock} — necessite AuthUI.tsx etendu */}
           <PasswordInput
             label="Nouveau mot de passe"
+            icon={Lock}
             placeholder="8 caractères minimum"
             autoComplete="new-password"
             autoFocus
@@ -62,8 +65,10 @@ export default function UpdatePasswordPage() {
           <PasswordStrength password={passwordValue} />
         </div>
 
+        {/* Prop icon={KeyRound} — confirmation du mot de passe */}
         <PasswordInput
           label="Confirmer le mot de passe"
+          icon={KeyRound}
           placeholder="Répétez le mot de passe"
           autoComplete="new-password"
           {...register('confirmPassword')}

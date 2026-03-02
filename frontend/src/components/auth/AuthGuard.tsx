@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
-import { useRouter, usePathname }              from 'next/navigation'
-import Link                                    from 'next/link'
-import { useAuth }                             from '@/hooks/useAuth'
-import { cn }                                  from '@/lib/utils'
-import type { UserRole }                       from '@/types'
+import { useEffect, type ReactNode }    from 'react'
+import { useRouter, usePathname }       from 'next/navigation'
+import Link                             from 'next/link'
+import { LogOut }                       from 'lucide-react'
+import { useAuth }                      from '@/hooks/useAuth'
+import { cn }                           from '@/lib/utils'
+import type { UserRole }                from '@/types'
 
 // ── Auth Guard ────────────────────────────────────────────────
 
@@ -37,18 +38,15 @@ export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
 }
 
 // ── Loading screen ────────────────────────────────────────────
-// Fond sombre cohérent avec le design Precision Industrial
 
 function AuthLoadingScreen() {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
-        {/* Spinner géométrique */}
         <div className="relative w-8 h-8">
           <div className="absolute inset-0 border border-slate-700 rounded-full" />
           <div className="absolute inset-0 border-t border-blue-500 rounded-full animate-spin" />
         </div>
-        {/* Label */}
         <div className="text-center space-y-1">
           <p className="text-[10px] font-bold tracking-[0.25em] uppercase text-slate-500">
             Vérification en cours
@@ -179,12 +177,15 @@ export function RoleNavigation() {
             <p className="text-xs font-semibold text-slate-300 truncate">{profile.full_name}</p>
             <p className="text-[10px] text-slate-600">{meta.label}</p>
           </div>
+
+          {/* Bouton deconnexion — <LogOut /> Lucide remplace l'entite HTML &#x2192; */}
           <button
             onClick={signOut}
-            title="Deconnexion"
-            className="w-7 h-7 flex items-center justify-center text-slate-700 hover:text-red-400 hover:bg-red-950/20 transition-all text-xs"
+            title="Déconnexion"
+            aria-label="Se déconnecter"
+            className="w-7 h-7 flex items-center justify-center text-slate-700 hover:text-red-400 hover:bg-red-950/20 transition-all"
           >
-            &#x2192;
+            <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
           </button>
         </div>
       </div>

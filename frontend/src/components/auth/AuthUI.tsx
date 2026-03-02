@@ -4,25 +4,28 @@ import { forwardRef, useState, type InputHTMLAttributes, type ButtonHTMLAttribut
 import { cn } from '@/lib/utils'
 
 // ============================================================
-// INPUT
+// INPUT — supporte un icone Lucide optionnel via la prop `icon`
 // ============================================================
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label:   string
   error?:  string
   hint?:   string
+  // Composant Lucide passé directement (ex : icon={Mail})
+  icon?:   React.ElementType
 }
 
 export const AuthInput = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, hint, className, id, ...props }, ref) => {
+  ({ label, error, hint, icon: Icon, className, id, ...props }, ref) => {
     const inputId = id ?? label.toLowerCase().replace(/\s+/g, '-')
 
     return (
       <div className="space-y-1.5">
         <label
           htmlFor={inputId}
-          className="block text-[10px] font-bold tracking-[0.18em] uppercase text-slate-500"
+          className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.18em] uppercase text-slate-500"
         >
+          {Icon && <Icon className="w-3 h-3" aria-hidden="true" />}
           {label}
         </label>
 
@@ -32,7 +35,7 @@ export const AuthInput = forwardRef<HTMLInputElement, InputProps>(
           className={cn(
             'w-full px-4 py-3 text-sm text-slate-100 bg-slate-900 border',
             'placeholder:text-slate-700 outline-none transition-all duration-150',
-            'rounded-none', // strict geometric identity
+            'rounded-none',
             error
               ? 'border-red-500/70 focus:border-red-400 focus:ring-1 focus:ring-red-500/20'
               : 'border-slate-700 hover:border-slate-600 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20',
@@ -57,7 +60,7 @@ export const AuthInput = forwardRef<HTMLInputElement, InputProps>(
 AuthInput.displayName = 'AuthInput'
 
 // ============================================================
-// PASSWORD INPUT
+// PASSWORD INPUT — icone Lock integre dans le label
 // ============================================================
 
 interface PasswordInputProps extends Omit<InputProps, 'type'> {}
@@ -78,6 +81,7 @@ export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
             'text-slate-600 hover:text-blue-400 transition-colors select-none',
             props.error ? 'top-[2rem]' : 'top-[2.1rem]'
           )}
+          aria-label={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
         >
           {visible ? 'CACHER' : 'VOIR'}
         </button>
@@ -188,8 +192,8 @@ export function PasswordStrength({ password }: { password: string }) {
   if (!password) return null
 
   const checks = [
-    { ok: password.length >= 8,  label: '8 car.' },
-    { ok: /[A-Z]/.test(password), label: 'Maj.'  },
+    { ok: password.length >= 8,   label: '8 car.' },
+    { ok: /[A-Z]/.test(password), label: 'Maj.'   },
     { ok: /[0-9]/.test(password), label: 'Chiffre' },
   ]
 
