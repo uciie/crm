@@ -1,191 +1,149 @@
 'use client'
 import { useState, useCallback } from 'react'
-import { useLeads }   from '@/hooks/useLeads'
-import { useAuth }    from '@/hooks/useAuth'
-import { Badge }      from '@/components/ui/Badge'
-import { Button }     from '@/components/ui/Button'
-import { Spinner }    from '@/components/ui/Spinner'
-import { Modal }      from '@/components/ui/Modal'
-import { api }        from '@/lib/api'
+import {
+  PlusCircle, RefreshCcw, CheckCircle2, XCircle,
+  UserPlus, TrendingUp,
+} from 'lucide-react'
+import { useLeads }       from '@/hooks/useLeads'
+import { useAuth }        from '@/hooks/useAuth'
+import { leadsService }   from '@/services/leads.service'
+import { LeadForm }       from '@/components/leads/LeadForm'
+import { TableSkeleton }  from '@/components/ui/Skeleton'
 import { formatCurrency, formatDate } from '@/lib/utils'
+import { cn }             from '@/lib/utils'
+import type { Lead }      from '@/types'
 
-const STATUS_CFG: Record<string, { color: string; bg: string }> = {
-  nouveau:     { color: '#94a3b8', bg: '#f8fafc' },
-  contacté:    { color: '#60a5fa', bg: '#eff6ff' },
-  qualifié:    { color: '#f59e0b', bg: '#fffbeb' },
-  proposition: { color: '#a78bfa', bg: '#f5f3ff' },
-  négociation: { color: '#f97316', bg: '#fff7ed' },
-  gagné:       { color: '#34d399', bg: '#f0fdf4' },
-  perdu:       { color: '#f87171', bg: '#fef2f2' },
+// Icones Lucide par statut — aucun emoji
+const STATUS_CFG: Record<string, {
+  icon:  React.ElementType
+  label: string
+  cls:   string
+}> = {
+  nouveau:     { icon: PlusCircle,   label: 'Nouveau',     cls: 'text-slate-400 bg-slate-900 border-slate-700' },
+  contacté:    { icon: RefreshCcw,   label: 'Contacté',    cls: 'text-blue-400 bg-blue-950/40 border-blue-800/40' },
+  qualifié:    { icon: RefreshCcw,   label: 'Qualifié',    cls: 'text-amber-400 bg-amber-950/40 border-amber-800/40' },
+  proposition: { icon: RefreshCcw,   label: 'Proposition', cls: 'text-violet-400 bg-violet-950/40 border-violet-800/40' },
+  négociation: { icon: RefreshCcw,   label: 'Négociation', cls: 'text-orange-400 bg-orange-950/40 border-orange-800/40' },
+  gagné:       { icon: CheckCircle2, label: 'Gagné',       cls: 'text-emerald-400 bg-emerald-950/40 border-emerald-800/40' },
+  perdu:       { icon: XCircle,      label: 'Perdu',       cls: 'text-red-400 bg-red-950/40 border-red-800/40' },
 }
 
-const STATUS_LIST = ['nouveau', 'contacté', 'qualifié', 'proposition', 'négociation', 'gagné', 'perdu']
+function StatusBadge({ status }: { status: string }) {
+  const cfg  = STATUS_CFG[status] ?? STATUS_CFG.nouveau
+  const Icon = cfg.icon
+  return (
+    <span className={cn(
+      'inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold tracking-[0.12em] uppercase border',
+      cfg.cls
+    )}>
+      <Icon className="w-2.5 h-2.5" aria-hidden="true" />
+      {cfg.label}
+    </span>
+  )
+}
 
 export default function LeadsPage() {
   const { leads, loading, refetch } = useLeads()
-  const { isCommercial } = useAuth()
-  const [showForm, setShowForm] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [formError, setFormError] = useState<string | null>(null)
-  const [newLead, setNewLead] = useState({
-    title: '', status: 'nouveau', value: '', probability: '0',
-    expected_close_date: '', source: '', notes: '',
-  })
+  const { isCommercial }            = useAuth()
+  const [showForm, setShowForm]     = useState(false)
+  const [editLead, setEditLead]     = useState<Lead | null>(null)
 
-  const set = (k: string, v: string) => setNewLead(p => ({ ...p, [k]: v }))
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newLead.title.trim()) { setFormError('Le titre est obligatoire'); return }
-    setFormError(null)
-    setSubmitting(true)
-    try {
-      await api.post('/leads', {
-        title:               newLead.title,
-        status:              newLead.status,
-        value:               newLead.value ? Number(newLead.value) : undefined,
-        probability:         Number(newLead.probability),
-        expected_close_date: newLead.expected_close_date || undefined,
-        source:              newLead.source || undefined,
-        notes:               newLead.notes  || undefined,
-      })
-      setShowForm(false)
-      setNewLead({ title: '', status: 'nouveau', value: '', probability: '0', expected_close_date: '', source: '', notes: '' })
-      refetch()
-    } catch (err: any) {
-      setFormError(err.message)
-    } finally {
-      setSubmitting(false)
-    }
-  }
+  const handleSaved = useCallback(() => {
+    setShowForm(false)
+    setEditLead(null)
+    refetch()
+  }, [refetch])
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="flex flex-col gap-5 h-full p-6">
+      {/* En-tete */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-gray-100">Leads</h1>
-          <p className="text-sm text-gray-500">{leads.length} opportunités</p>
+          <div className="flex items-center gap-2 mb-1">
+            <TrendingUp className="w-4 h-4 text-blue-500" aria-hidden="true" />
+            <h1 className="text-sm font-bold tracking-[0.15em] uppercase text-slate-200">Leads</h1>
+          </div>
+          <p className="text-xs text-slate-600">{leads.length} opportunité{leads.length !== 1 ? 's' : ''}</p>
         </div>
         {isCommercial && (
-          <Button onClick={() => setShowForm(true)}>+ Nouveau lead</Button>
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-2 px-4 py-2 text-xs font-bold tracking-wider uppercase bg-blue-600 text-white hover:bg-blue-500 transition-all"
+          >
+            <UserPlus className="w-3.5 h-3.5" aria-hidden="true" />
+            Nouveau lead
+          </button>
         )}
       </div>
 
-      {loading ? (
-        <div className="flex justify-center py-12"><Spinner /></div>
-      ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Tableau */}
+      <div className="bg-slate-900 border border-slate-800 overflow-hidden flex-1">
+        <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100">
+            <thead className="bg-slate-950/60 border-b border-slate-800">
               <tr>
                 {['Opportunité', 'Contact', 'Valeur', 'Probabilité', 'Statut', 'Clôture'].map(h => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                  <th key={h} className="px-5 py-3.5 text-left text-[10px] font-bold tracking-[0.18em] uppercase text-slate-600">
+                    {h}
+                  </th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
-              {leads.map(lead => {
-                const scfg = STATUS_CFG[lead.status] ?? STATUS_CFG.nouveau
-                return (
-                  <tr key={lead.id} className="hover:bg-gray-50 transition">
+            <tbody className="divide-y divide-slate-800/50">
+              {loading ? (
+                <TableSkeleton rows={8} cols={6} />
+              ) : leads.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-16 text-slate-600 text-sm">
+                    Aucun lead trouvé
+                  </td>
+                </tr>
+              ) : (
+                leads.map(lead => (
+                  <tr
+                    key={lead.id}
+                    className="hover:bg-slate-800/30 transition-colors cursor-pointer group"
+                    onClick={() => isCommercial && setEditLead(lead)}
+                  >
                     <td className="px-5 py-3.5">
-                      <p className="text-sm font-semibold text-gray-800">{lead.title}</p>
-                      {lead.company && <p className="text-xs text-gray-400">{lead.company.name}</p>}
+                      <p className="text-sm font-semibold text-slate-200">{lead.title}</p>
+                      {lead.company && <p className="text-xs text-slate-600 mt-0.5">{lead.company.name}</p>}
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-gray-700">
+                    <td className="px-5 py-3.5 text-sm text-slate-400">
                       {lead.contact ? `${lead.contact.first_name} ${lead.contact.last_name}` : '—'}
                     </td>
-                    <td className="px-5 py-3.5 text-sm font-bold text-gray-900">{formatCurrency(lead.value)}</td>
+                    <td className="px-5 py-3.5 text-sm font-bold text-slate-200">
+                      {formatCurrency(lead.value)}
+                    </td>
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
-                        <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-indigo-500" style={{ width: `${lead.probability}%` }} />
+                        <div className="w-16 h-1 bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-blue-500" style={{ width: `${lead.probability}%` }} />
                         </div>
-                        <span className="text-xs text-gray-600">{lead.probability}%</span>
+                        <span className="text-xs text-slate-500 font-mono">{lead.probability}%</span>
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <Badge label={lead.status} color={scfg.color} bg={scfg.bg} />
+                      <StatusBadge status={lead.status} />
                     </td>
-                    <td className="px-5 py-3.5 text-sm text-gray-600">{formatDate(lead.expected_close_date)}</td>
+                    <td className="px-5 py-3.5 text-xs text-slate-600">
+                      {formatDate(lead.expected_close_date)}
+                    </td>
                   </tr>
-                )
-              })}
-              {leads.length === 0 && (
-                <tr><td colSpan={6} className="text-center py-10 text-gray-400 text-sm">Aucun lead trouvé</td></tr>
+                ))
               )}
             </tbody>
           </table>
         </div>
-      )}
+      </div>
 
-      {/* Modal création lead */}
-      {showForm && (
-        <Modal title="Nouveau lead" onClose={() => setShowForm(false)} size="md">
-          <form onSubmit={handleCreate} className="p-6 space-y-4">
-            {formError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">{formError}</div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Titre *</label>
-              <input autoFocus required value={newLead.title} onChange={e => set('title', e.target.value)}
-                placeholder="Ex: Projet ERP — ACME Corp"
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Statut</label>
-                <select value={newLead.status} onChange={e => set('status', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400">
-                  {STATUS_LIST.map(s => (
-                    <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
-                <input value={newLead.source} onChange={e => set('source', e.target.value)}
-                  placeholder="LinkedIn, Referral..."
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400" />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Valeur (€)</label>
-                <input type="number" min="0" value={newLead.value} onChange={e => set('value', e.target.value)}
-                  placeholder="ex: 25000"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Probabilité (%)</label>
-                <input type="number" min="0" max="100" value={newLead.probability} onChange={e => set('probability', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400" />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Date de clôture prévue</label>
-              <input type="date" value={newLead.expected_close_date} onChange={e => set('expected_close_date', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400" />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-              <textarea rows={3} value={newLead.notes} onChange={e => set('notes', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 resize-none" />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="secondary" onClick={() => setShowForm(false)}>Annuler</Button>
-              <Button type="submit" disabled={submitting}>
-                {submitting ? 'Création...' : 'Créer le lead'}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+      {/* Formulaire création/édition */}
+      {(showForm || editLead) && (
+        <LeadForm
+          lead={editLead}
+          onClose={() => { setShowForm(false); setEditLead(null) }}
+          onSaved={handleSaved}
+        />
       )}
     </div>
   )
