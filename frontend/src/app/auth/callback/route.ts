@@ -8,6 +8,17 @@
 //
 // Sans ce fichier → pas de cookies sb-* → middleware voit user=null
 // → redirige vers /login → boucle infinie.
+//
+// FIX reset password :
+// L'ancienne version lisait searchParams.get('type') pour détecter
+// un flow recovery. Supabase n'injecte PAS type=recovery dans l'URL
+// de redirection PKCE — seul ?code=XXX est ajouté.
+// Résultat : type était toujours null, la condition échouait, et
+// l'utilisateur atterrissait sur /dashboard.
+//
+// Solution : auth.service.ts encode la destination dans ?next= :
+//   redirectTo: `${origin}/auth/callback?next=/update-password`
+// Supabase concatène &code=XXX → le callback lit `next` directement.
 // ══════════════════════════════════════════════════════════════
 
 import { createServerClient } from '@supabase/ssr'
@@ -18,13 +29,12 @@ import type { NextRequest }   from 'next/server'
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
 
-  const code        = searchParams.get('code')
-  const type        = searchParams.get('type')       // 'recovery', 'signup', etc.
-  const redirectTo  = searchParams.get('redirectTo') ?? '/dashboard'
-  const next        = searchParams.get('next')       ?? redirectTo
+  const code = searchParams.get('code')
+  // `next` est encodé par notre service dans le redirectTo.
+  // Fallback sur /dashboard pour les autres flows (signup, etc.)
+  const next = searchParams.get('next') ?? '/dashboard'
 
   if (!code) {
-    // Pas de code → erreur Supabase ou lien expiré
     console.error('[auth/callback] Aucun code reçu dans l\'URL')
     return NextResponse.redirect(`${origin}/login?error=no_code`)
   }
@@ -39,7 +49,7 @@ export async function GET(request: NextRequest) {
         getAll() {
           return cookieStore.getAll()
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: Array<{ name: string; value: string; options?: Record<string, any> }>) {
           cookiesToSet.forEach(({ name, value, options }) => {
             cookieStore.set(name, value, options)
           })
@@ -57,11 +67,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`)
   }
 
-  // Redirection après reset de mot de passe
-  if (type === 'recovery') {
-    return NextResponse.redirect(`${origin}/update-password`)
-  }
-
-  // Redirection normale après login/signup
+  // Redirection vers la destination demandée (ex: /update-password ou /dashboard)
   return NextResponse.redirect(`${origin}${next}`)
 }
