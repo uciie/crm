@@ -203,12 +203,24 @@ export interface KanbanColumn extends PipelineStageConfig {
 
 // ── Tâches ────────────────────────────────────────────────────
 
-export type TaskStatus   = 'à_faire' | 'en_cours' | 'terminée' | 'annulée'
-export type TaskPriority = 'basse' | 'moyenne' | 'haute' | 'urgente'
+export enum TaskStatus {
+  AFaire   = 'à_faire',
+  EnCours  = 'en_cours',
+  Terminee = 'terminée',
+  Annulee  = 'annulée',
+}
+
+export enum TaskPriority {
+  Basse   = 'basse',
+  Moyenne = 'moyenne',
+  Haute   = 'haute',
+  Urgente = 'urgente',
+}
 
 export interface Task {
   id:            string
   title:         string
+  type:          TaskType
   description?:  string
   status:        TaskStatus
   priority:      TaskPriority
@@ -223,6 +235,82 @@ export interface Task {
   contact?:  Pick<Contact, 'id' | 'first_name' | 'last_name' | 'email'>
   lead?:     Pick<Lead, 'id' | 'title' | 'value'>
   assignee?: Pick<Profile, 'id' | 'full_name' | 'avatar_url'>
+}
+
+export enum TaskType {
+  Rappel     = 'rappel',
+  RendezVous = 'rendez-vous',
+  Appel      = 'appel',
+  Tache      = 'tache',
+}
+
+export interface LinkedContact {
+  id:         string
+  first_name: string
+  last_name:  string
+  email?:     string
+}
+
+export interface LinkedLead {
+  id:     string
+  title:  string
+  value?: number
+}
+
+export interface Assignee {
+  id:          string
+  full_name:   string
+  avatar_url?: string
+}
+
+export interface TaskFormValues {
+  title:        string
+  description?: string
+  type:         TaskType
+  status:       TaskStatus
+  priority:     TaskPriority
+  due_date?:    string
+  contact_id?:  string
+  lead_id?:     string
+}
+
+export enum NotificationType {
+  DueSoon  = 'due_soon',
+  Overdue  = 'overdue',
+  Reminder = 'reminder',
+}
+
+export interface AppNotification {
+  id:         string
+  type:       NotificationType
+  task:       Pick<Task, 'id' | 'title' | 'due_date' | 'type'>
+  created_at: string
+  read:       boolean
+}
+
+export interface TaskFilters {
+  status?:    TaskStatus | 'all'
+  type?:      TaskType   | 'all'
+  priority?:  TaskPriority
+  date_from?: string
+  date_to?:   string
+  overdue?:   boolean
+  today?:     boolean
+  page?:      number
+  limit?:     number
+}
+
+export interface PaginatedResponse<T> {
+  data:       T[]
+  pagination: { page: number; limit: number; total: number; totalPages: number }
+}
+
+export interface TaskStats {
+  todo:        number
+  in_progress: number
+  done:        number
+  overdue:     number
+  due_soon:    number
 }
 
 // ── Campagnes email ───────────────────────────────────────────
