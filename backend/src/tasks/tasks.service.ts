@@ -153,8 +153,7 @@ export class TasksService {
         description: dto.description,
         status:      dto.status ?? 'à_faire',
         priority:    dto.priority ?? 'moyenne',
-        // FIX #1 — Persistance du type de tâche (défaut : 'tâche')
-        type:        dto.type ?? 'tâche',
+        type:        dto.type ?? 'tache',
         due_date:    dto.due_date ? new Date(dto.due_date) : undefined,
         contact_id:  dto.contact_id,
         lead_id:     dto.lead_id,

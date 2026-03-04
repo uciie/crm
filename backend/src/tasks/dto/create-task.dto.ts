@@ -6,9 +6,8 @@ import { Transform } from 'class-transformer'
 
 export type TaskStatus   = 'à_faire' | 'en_cours' | 'terminée' | 'annulée'
 export type TaskPriority = 'basse' | 'moyenne' | 'haute' | 'urgente'
-// FIX #1 — Ajout du type de tâche (rappel / rendez-vous / appel / tâche)
 // Permet de distinguer les activités calendaires dans la vue agenda.
-export type TaskType = 'tâche' | 'rappel' | 'rendez-vous' | 'appel'
+export type TaskType = 'tache' | 'rappel' | 'rendez-vous' | 'appel'
 
 export class CreateTaskDto {
   @IsString()
@@ -30,7 +29,7 @@ export class CreateTaskDto {
 
   // FIX #1 — Nouveau champ type pour catégoriser la tâche
   @IsOptional()
-  @IsEnum(['tâche', 'rappel', 'rendez-vous', 'appel'])
+  @IsEnum(['tache', 'rappel', 'rendez-vous', 'appel'])
   type?: TaskType
 
   // FIX #2 — Validation anti-date passée : @MinDate(new Date()) rejette
