@@ -151,9 +151,9 @@ export class TasksService {
       .values({
         title:       dto.title,
         description: dto.description,
-        status:      dto.status ?? 'à_faire',
+        status:      dto.status   ?? 'à_faire',
         priority:    dto.priority ?? 'moyenne',
-        type:        dto.type ?? 'tache',
+        type:        dto.type     ?? 'tache',
         due_date:    dto.due_date ? new Date(dto.due_date) : undefined,
         contact_id:  dto.contact_id,
         lead_id:     dto.lead_id,

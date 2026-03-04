@@ -1,8 +1,8 @@
 import {
   IsString, IsOptional, IsEnum, IsUUID,
-  IsDateString, MaxLength, IsNotEmpty, MinDate
+  IsDate, MaxLength, IsNotEmpty, MinDate
 } from 'class-validator'
-import { Transform } from 'class-transformer'
+import { Type } from 'class-transformer'
 
 export type TaskStatus   = 'à_faire' | 'en_cours' | 'terminée' | 'annulée'
 export type TaskPriority = 'basse' | 'moyenne' | 'haute' | 'urgente'
@@ -36,10 +36,12 @@ export class CreateTaskDto {
   // toute date antérieure à maintenant, sauf pour les statuts déjà terminés.
   // Le @Transform garantit que la comparaison porte sur un objet Date.
   @IsOptional()
-  @IsDateString()
-  @Transform(({ value }) => value)
+  // Use class-transformer to convert the incoming string to a Date instance,
+  // and validate it as a Date. This works with ValidationPipe.transform = true.
+  @Type(() => Date)
+  @IsDate()
   @MinDate(new Date(), { message: 'La date d\'échéance ne peut pas être dans le passé.' })
-  due_date?: string             // ISO string → converti en Date
+  due_date?: Date             // Date instance after transformation
 
   @IsOptional()
   @IsUUID()
