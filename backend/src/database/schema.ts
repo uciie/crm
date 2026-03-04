@@ -8,6 +8,7 @@ export const userRoleEnum          = pgEnum('user_role',           ['admin', 'co
 export const leadStatusEnum        = pgEnum('lead_status',         ['nouveau', 'contacté', 'qualifié', 'proposition', 'négociation', 'gagné', 'perdu'])
 export const taskStatusEnum        = pgEnum('task_status',         ['à_faire', 'en_cours', 'terminée', 'annulée'])
 export const taskPriorityEnum      = pgEnum('task_priority',       ['basse', 'moyenne', 'haute', 'urgente'])
+export const taskTypeEnum          = pgEnum('task_type',           ['tache', 'rappel', 'rendez-vous', 'appel'])
 export const communicationTypeEnum = pgEnum('communication_type',  ['email', 'appel', 'réunion', 'note', 'sms'])
 export const pipelineStageEnum     = pgEnum('pipeline_stage',      ['prospect', 'qualification', 'proposition', 'négociation', 'gagné', 'perdu'])
 
@@ -53,20 +54,7 @@ export const contacts = pgTable('contacts', {
   mobile:        varchar('mobile',     { length: 20 }),
   job_title:     varchar('job_title',  { length: 150 }),
   department:    varchar('department', { length: 100 }),
-
-  // Fix #5 — ajout de .onDelete('set null') :
-  //   Avant : la suppression d'une entreprise levait une erreur FK ou laissait
-  //           le contact avec un company_id pointant vers une ligne inexistante.
-  //   Après : la suppression d'une entreprise met company_id à NULL sur tous
-  //           ses contacts (comportement attendu dans un CRM).
-  //
-  // ⚠️  Cette modification requiert une migration SQL :
-  //       ALTER TABLE contacts
-  //         DROP CONSTRAINT contacts_company_id_fkey,
-  //         ADD CONSTRAINT contacts_company_id_fkey
-  //           FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL;
   company_id:    uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
-
   avatar_url:    text('avatar_url'),
   linkedin_url:  text('linkedin_url'),
   address:       text('address'),
@@ -124,6 +112,7 @@ export const tasks = pgTable('tasks', {
   id:           uuid('id').primaryKey().defaultRandom(),
   title:        varchar('title', { length: 255 }).notNull(),
   description:  text('description'),
+  type:         taskTypeEnum('type').notNull().default('tache'),
   status:       taskStatusEnum('status').notNull().default('à_faire'),
   priority:     taskPriorityEnum('priority').notNull().default('moyenne'),
   due_date:     timestamp('due_date',     { withTimezone: true }),
