@@ -77,7 +77,7 @@ export default function UpdatePasswordPage() {
 
         <div className="pt-1">
           <AuthButton type="submit" loading={isSubmitting}>
-            Enregistrer le mot de passe
+            Mettre à jour
           </AuthButton>
         </div>
       </form>

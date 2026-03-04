@@ -94,10 +94,10 @@ export default function RegisterPage() {
 
   return (
     <AuthLayout
-      title="Creer un compte"
+      title="Créer un compte"
       subtitle="Rejoignez votre equipe sur CRM Pro."
       backHref="/login"
-      backLabel="Retour a la connexion"
+      backLabel="Retour à la connexion"
     >
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
 
@@ -145,7 +145,7 @@ export default function RegisterPage() {
 
         <div className="pt-1">
           <AuthButton type="submit" loading={isSubmitting}>
-            Creer mon compte
+            Créer mon compte
           </AuthButton>
         </div>
 
