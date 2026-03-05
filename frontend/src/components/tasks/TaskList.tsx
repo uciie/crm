@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// components/tasks/TaskList.tsx — Gestionnaire de tâches (vue Liste)
+// components/TaskList.tsx — Gestionnaire de tâches (vue Liste)
 // Utilise : Badge, Button, DataTable, Spinner, Skeleton du projet
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -8,7 +8,7 @@
 import { useState, useMemo } from 'react'
 import {
   CheckCircle2, AlertTriangle, CalendarCheck, CalendarClock,
-  Pencil, Trash2, Circle, Clock3, ChevronRight,
+  Pencil, Trash2, Eye, Circle, Clock3, ChevronRight,
   User, TrendingUp,
 } from 'lucide-react'
 import { Badge }      from '@/components/ui/Badge'
@@ -18,9 +18,9 @@ import { Skeleton }   from '@/components/ui/Skeleton'
 import {
   TASK_TYPE_CONFIG, TASK_STATUS_CONFIG, TASK_PRIORITY_CONFIG,
   isOverdue, isDueToday, formatDate,
-} from '../../lib/task-config'
-import { TaskStatus, TaskPriority } from '../../types/index'
-import type { Task } from '../../types/index'
+} from '@/lib/task-config'
+import { TaskStatus, TaskPriority } from '@/types/index'
+import type { Task } from '@/types/index'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types filtres
@@ -33,6 +33,7 @@ interface TaskListProps {
   tasks:    Task[]
   loading:  boolean
   onToggle: (task: Task) => void
+  onOpen:   (task: Task) => void
   onEdit:   (task: Task) => void
   onDelete: (id: string) => void
 }
@@ -129,7 +130,7 @@ function TitleCell({ task, onToggle }: { task: Task; onToggle: () => void }) {
 // Composant principal
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function TaskList({ tasks, loading, onToggle, onEdit, onDelete }: TaskListProps) {
+export function TaskList({ tasks, loading, onToggle, onOpen, onEdit, onDelete }: TaskListProps) {
   const [statusFilter,  setStatusFilter]  = useState<StatusFilter>('all')
   const [urgencyFilter, setUrgencyFilter] = useState<UrgencyFilter>('all')
 
@@ -240,28 +241,38 @@ export function TaskList({ tasks, loading, onToggle, onEdit, onDelete }: TaskLis
     },
     {
       key: 'actions',
-      label: '',
-      width: '80px',
+      label: 'Actions',
+      width: '200px',
       render: (row: Task) => (
-        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outline"
+            size="xs"
+            icon={<Eye size={11} />}
+            onClick={e => { e.stopPropagation(); onOpen(row) }}
+          >
+            Ouvrir
+          </Button>
           <Button
             variant="ghost"
             size="xs"
             icon={<Pencil size={11} />}
             onClick={e => { e.stopPropagation(); onEdit(row) }}
-            aria-label="Modifier"
-          />
+          >
+            Modifier
+          </Button>
           <Button
             variant="danger"
             size="xs"
             icon={<Trash2 size={11} />}
             onClick={e => { e.stopPropagation(); onDelete(row.id) }}
-            aria-label="Supprimer"
-          />
+          >
+            Supprimer
+          </Button>
         </div>
       ),
     },
-  ], [onToggle, onEdit, onDelete])
+  ], [onToggle, onOpen, onEdit, onDelete])
 
   return (
     <div className="flex flex-col h-full">

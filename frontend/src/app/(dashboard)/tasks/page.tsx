@@ -5,7 +5,7 @@
 
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import {
   LayoutList, CalendarDays, Plus, RotateCw,
   Clock3, Layers, CheckCircle2, AlertTriangle, Zap,
@@ -17,8 +17,10 @@ import { CalendarView }       from '@/components/tasks/CalendarView'
 import { TaskList }           from '@/components/tasks/TaskList'
 import { TaskForm }           from '@/components/tasks/TaskForm'
 import { NotificationCenter } from '@/components/tasks/NotificationCenter'
-import { useTasks, useTaskStats } from '@/hooks/useTasks'
-import type { Task, TaskFormValues } from '@/types'
+import { useTasks } from '@/hooks/useTasks'
+import { isOverdue, isDueToday } from '@/lib/task-config'
+import { TaskStatus } from '@/types/index'
+import type { Task, TaskFormValues } from '@/types/index'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Stat Card — design cohérent avec le système existant (bg-slate-900)
@@ -96,7 +98,25 @@ export default function TasksPage() {
   const [notifOpen, setNotifOpen] = useState(false)
 
   const { tasks, loading, refetch, create, update, remove, toggle } = useTasks()
-  const { stats, loading: statsLoading } = useTaskStats()
+
+  // Stats calculées localement — se mettent à jour instantanément à chaque
+  // changement de l'état tasks (toggle, create, delete) sans aller-retour API.
+  const stats = useMemo(() => ({
+    todo:        tasks.filter(t => t.status === TaskStatus.AFaire).length,
+    in_progress: tasks.filter(t => t.status === TaskStatus.EnCours).length,
+    done:        tasks.filter(t => t.status === TaskStatus.Terminee).length,
+    overdue:     tasks.filter(t => isOverdue(t.due_date, t.status)).length,
+    due_soon:    tasks.filter(t => isDueToday(t.due_date) && t.status !== TaskStatus.Terminee).length,
+  }), [tasks])
+
+  // Synchronisation explicite — utile pour déboguer ou déclencher des effets secondaires
+  useEffect(() => {
+    // Exemple : mise à jour du titre de l'onglet navigateur
+    const overdue = stats.overdue
+    document.title = overdue > 0
+      ? `(${overdue}) Tâches & Agenda`
+      : 'Tâches & Agenda'
+  }, [stats])
 
   const handleCreate = useCallback(() => {
     setEditTask(undefined)
@@ -190,28 +210,28 @@ export default function TasksPage() {
             icon={<Clock3 size={28} />}
             label="À faire"
             value={stats?.todo ?? 0}
-            loading={statsLoading}
+            loading={loading}
             accent="text-blue-400"
           />
           <StatCard
             icon={<Layers size={28} />}
             label="En cours"
             value={stats?.in_progress ?? 0}
-            loading={statsLoading}
+            loading={loading}
             accent="text-sky-400"
           />
           <StatCard
             icon={<CheckCircle2 size={28} />}
             label="Terminées"
             value={stats?.done ?? 0}
-            loading={statsLoading}
+            loading={loading}
             accent="text-emerald-400"
           />
           <StatCard
             icon={<AlertTriangle size={28} />}
             label="En retard"
             value={stats?.overdue ?? 0}
-            loading={statsLoading}
+            loading={loading}
             accent="text-red-400"
           />
         </section>
@@ -246,6 +266,7 @@ export default function TasksPage() {
                 tasks={tasks}
                 loading={loading}
                 onToggle={toggle}
+                onOpen={handleEdit}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
               />
