@@ -206,6 +206,18 @@ export default function LeadsPage() {
                       onClick={e => e.stopPropagation()}
                     >
                       <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                        
+                        {isCommercial && (
+                          <Tooltip label="Ouvrir">
+                            <button
+                              onClick={() => router.push(`/leads/${lead.id}`)}
+                              className="p-1.5 text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-all"
+                              aria-label={`Ouvrir ${lead.title}`}
+                            >
+                              <ArrowUpRight className="w-3.5 h-3.5" />
+                            </button>
+                          </Tooltip>
+                        )}
 
                         {isCommercial && (
                           <Tooltip label="Modifier">
