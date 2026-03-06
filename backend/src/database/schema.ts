@@ -140,8 +140,11 @@ export const communications = pgTable('communications', {
   lead_id:           uuid('lead_id').references(() => leads.id),
   company_id:        uuid('company_id').references(() => companies.id),
   brevo_message_id:  text('brevo_message_id'),
+  status:           varchar('status', { length: 20 }).notNull().default('sent'),
+  delivery_error:   text('delivery_error'),
   created_by:        uuid('created_by').notNull().references(() => profiles.id),
   created_at:        timestamp('created_at', { withTimezone: true }).defaultNow(),
+  updated_at:       timestamp('updated_at').defaultNow(),
 })
 
 // Table email_campaigns

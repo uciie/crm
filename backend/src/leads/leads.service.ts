@@ -1,8 +1,16 @@
+// ============================================================
+// leads/leads.service.ts  — with email triggers
+// Diff vs original: constructor + EmailService injected,
+// sendLeadAssigned() called after create(), sendDealStageChanged
+// available for pipeline moves.
+// ============================================================
+
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common'
 import { db } from '../database/db.config'
 import { leads, contacts, companies, profiles } from '../database/schema'
 import { eq, and, or, ilike, desc, sql, isNull } from 'drizzle-orm'
 import { CreateLeadDto } from './dto/create-lead.dto'
+import { EmailService }  from '../email/email.service'   // ← NEW
 
 export interface AuthUser {
   id:   string
@@ -10,17 +18,19 @@ export interface AuthUser {
 }
 
 export interface LeadFilters {
-  search?:     string
-  status?:     string
-  contact_id?: string
-  company_id?: string
+  search?:      string
+  status?:      string
+  contact_id?:  string
+  company_id?:  string
   assigned_to?: string
-  page?:       number
-  limit?:      number
+  page?:        number
+  limit?:       number
 }
 
 @Injectable()
 export class LeadsService {
+
+  constructor(private readonly emailService: EmailService) {} // ← NEW
 
   async findAll(user: AuthUser, filters: LeadFilters = {}) {
     const { search, status, contact_id, company_id, assigned_to, page = 1, limit = 20 } = filters
@@ -28,14 +38,8 @@ export class LeadsService {
 
     const conditions: any[] = []
 
-    // RLS applicatif : les non-admins voient leurs leads + leads non assignés
     if (user.role !== 'admin') {
-      conditions.push(
-        or(
-          eq(leads.assigned_to, user.id),
-          isNull(leads.assigned_to)
-        )
-      )
+      conditions.push(or(eq(leads.assigned_to, user.id), isNull(leads.assigned_to)))
     } else if (assigned_to) {
       conditions.push(eq(leads.assigned_to, assigned_to))
     }
@@ -94,12 +98,7 @@ export class LeadsService {
 
     return {
       data: rows,
-      pagination: {
-        page,
-        limit,
-        total:      Number(count),
-        totalPages: Math.ceil(Number(count) / limit),
-      },
+      pagination: { page, limit, total: Number(count), totalPages: Math.ceil(Number(count) / limit) },
     }
   }
 
@@ -141,6 +140,32 @@ export class LeadsService {
       })
       .returning()
 
+    // ── Email trigger — notify the assignee ─────────────────
+    // Fire-and-forget: never block the HTTP response for email sending
+    if (newLead.assigned_to) {
+      // Fetch the contact name if linked (best-effort)
+      let contactName: string | undefined
+      if (dto.contact_id) {
+        const [contact] = await db
+          .select({ first_name: contacts.first_name, last_name: contacts.last_name })
+          .from(contacts)
+          .where(eq(contacts.id, dto.contact_id))
+          .limit(1)
+        if (contact) contactName = `${contact.first_name} ${contact.last_name}`
+      }
+
+      this.emailService
+        .sendLeadAssigned({
+          assigneeId:   newLead.assigned_to,
+          leadId:       newLead.id,
+          leadTitle:    newLead.title,
+          contactName,
+          leadValue:    dto.value,
+          createdById:  userId,
+        })
+        .catch(err => console.error('[LeadsService] sendLeadAssigned failed:', err?.message))
+    }
+
     return newLead
   }
 
@@ -148,8 +173,8 @@ export class LeadsService {
     await this.findOne(id, user)
 
     const updatePayload: any = { ...dto, updated_at: new Date() }
-    if (dto.value !== undefined) updatePayload.value = dto.value?.toString()
-    if (dto.expected_close_date) updatePayload.expected_close_date = dto.expected_close_date
+    if (dto.value !== undefined)       updatePayload.value = dto.value?.toString()
+    if (dto.expected_close_date)       updatePayload.expected_close_date = dto.expected_close_date
 
     const [updated] = await db
       .update(leads)

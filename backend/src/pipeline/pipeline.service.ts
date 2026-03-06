@@ -1,23 +1,27 @@
+// ============================================================
+// pipeline/pipeline.service.ts — with email triggers
+// Diff vs original: EmailService injected + called in moveDeal()
+// ============================================================
+
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { db } from '../database/db.config'
-import {
-  pipelineDeals, pipelineStages, leads, contacts, companies, profiles
-} from '../database/schema'
+import { pipelineDeals, pipelineStages, leads, contacts, companies, profiles } from '../database/schema'
 import { eq, desc, sql } from 'drizzle-orm'
+import { EmailService } from '../email/email.service' 
 
 @Injectable()
 export class PipelineService {
-  // Récupère tout le pipeline sous forme de colonnes Kanban
+
+  constructor(private readonly emailService: EmailService) {} 
+
   async getKanbanBoard(userId: string, role: string) {
     const isAdmin = role === 'admin'
 
-    // Récupère toutes les étapes triées
     const stages = await db
       .select()
       .from(pipelineStages)
       .orderBy(pipelineStages.order_index)
 
-    // Récupère tous les deals avec leurs infos
     const dealsQuery = await db
       .select({
         deal_id:          pipelineDeals.id,
@@ -46,24 +50,22 @@ export class PipelineService {
           logo_url: companies.logo_url,
         },
         assignee: {
-          id:        profiles.id,
-          full_name: profiles.full_name,
+          id:         profiles.id,
+          full_name:  profiles.full_name,
           avatar_url: profiles.avatar_url,
         },
       })
       .from(pipelineDeals)
-      .leftJoin(leads, eq(pipelineDeals.lead_id, leads.id))
+      .leftJoin(leads,    eq(pipelineDeals.lead_id, leads.id))
       .leftJoin(contacts, eq(leads.contact_id, contacts.id))
-      .leftJoin(companies, eq(leads.company_id, companies.id))
+      .leftJoin(companies,eq(leads.company_id, companies.id))
       .leftJoin(profiles, eq(leads.assigned_to, profiles.id))
       .orderBy(desc(pipelineDeals.entered_stage_at))
 
-    // Filtre par commercial si pas admin
     const filteredDeals = isAdmin
       ? dealsQuery
       : dealsQuery.filter(d => d.lead?.assigned_to === userId)
 
-    // Construit la structure Kanban { [stage_id]: deals[] }
     const kanban = stages.map(stage => ({
       ...stage,
       deals: filteredDeals.filter(d => d.stage_id === stage.id),
@@ -75,49 +77,83 @@ export class PipelineService {
     return kanban
   }
 
-  // Déplace un deal vers une nouvelle étape (drag & drop)
-  async moveDeal(dealId: string, newStageId: string) {
-    const stage = await db
+  async moveDeal(dealId: string, newStageId: string, movedByUserId?: string) {
+    // ── 1. Resolve target stage ────────────────────────────
+    const [stage] = await db
       .select()
       .from(pipelineStages)
       .where(eq(pipelineStages.id, newStageId))
       .limit(1)
 
-    if (!stage[0]) throw new NotFoundException('Étape introuvable')
+    if (!stage) throw new NotFoundException('Étape introuvable')
 
+    // ── 2. Fetch current deal to get the old stage ────────
+    const [currentDeal] = await db
+      .select({ stage_id: pipelineDeals.stage_id, lead_id: pipelineDeals.lead_id })
+      .from(pipelineDeals)
+      .where(eq(pipelineDeals.id, dealId))
+      .limit(1)
+
+    let oldStageName = ''
+    if (currentDeal?.stage_id) {
+      const [oldStage] = await db
+        .select({ stage: pipelineStages.stage })
+        .from(pipelineStages)
+        .where(eq(pipelineStages.id, currentDeal.stage_id))
+        .limit(1)
+      oldStageName = oldStage?.stage ?? ''
+    }
+
+    // ── 3. Update deal ─────────────────────────────────────
     const [updatedDeal] = await db
       .update(pipelineDeals)
-      .set({
-        stage_id:         newStageId,
-        entered_stage_at: new Date(),
-        updated_at:       new Date(),
-      })
+      .set({ stage_id: newStageId, entered_stage_at: new Date(), updated_at: new Date() })
       .where(eq(pipelineDeals.id, dealId))
       .returning()
 
-    // Met à jour le statut du lead en conséquence
-    if (updatedDeal) {
-      const stageToStatus: Record<string, string> = {
-        prospect:      'nouveau',
-        qualification: 'qualifié',
-        proposition:   'proposition',
-        négociation:   'négociation',
-        gagné:         'gagné',
-        perdu:         'perdu',
-      }
-      const newStatus = stageToStatus[stage[0].stage]
-      if (newStatus) {
-        await db
-          .update(leads)
-          .set({ status: newStatus as any, updated_at: new Date() })
-          .where(eq(leads.id, updatedDeal.lead_id))
+    // ── 4. Sync lead status ────────────────────────────────
+    const stageToStatus: Record<string, string> = {
+      prospect:      'nouveau',
+      qualification: 'qualifié',
+      proposition:   'proposition',
+      négociation:   'négociation',
+      gagné:         'gagné',
+      perdu:         'perdu',
+    }
+
+    const newStatus = stageToStatus[stage.stage]
+    if (newStatus && updatedDeal) {
+      await db
+        .update(leads)
+        .set({ status: newStatus as any, updated_at: new Date() })
+        .where(eq(leads.id, updatedDeal.lead_id))
+    }
+
+    // ── 5. Email trigger — notify assignee ────────────────
+    if (updatedDeal && movedByUserId) {
+      const [lead] = await db
+        .select({ title: leads.title, assigned_to: leads.assigned_to })
+        .from(leads)
+        .where(eq(leads.id, updatedDeal.lead_id))
+        .limit(1)
+
+      if (lead?.assigned_to) {
+        this.emailService
+          .sendDealStageChanged({
+            assigneeId:  lead.assigned_to,
+            leadId:      updatedDeal.lead_id,
+            leadTitle:   lead.title,
+            oldStage:    oldStageName,
+            newStage:    stage.stage,
+            createdById: movedByUserId,
+          })
+          .catch(err => console.error('[PipelineService] sendDealStageChanged failed:', err?.message))
       }
     }
 
     return updatedDeal
   }
 
-  // Statistiques du pipeline pour le dashboard
   async getPipelineStats(userId: string, role: string) {
     const isAdmin = role === 'admin'
 
@@ -137,7 +173,6 @@ export class PipelineService {
       ORDER BY ps.order_index
     `)
 
-    // Calcul du CA pondéré (weighted revenue)
     const weightedRevenue = (stats.rows as any[]).reduce((sum: number, s: any) => {
       return sum + (Number(s.total_value) * Number(s.avg_probability) / 100)
     }, 0)
@@ -148,9 +183,7 @@ export class PipelineService {
     }
   }
 
-  // Crée un nouveau deal dans le pipeline
   async createDeal(leadId: string, stageId?: string) {
-    // Par défaut : première étape (Prospect)
     let targetStageId = stageId
     if (!targetStageId) {
       const [firstStage] = await db

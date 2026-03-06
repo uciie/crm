@@ -8,7 +8,7 @@ import { LeadsModule }       from './leads/leads.module'
 import { PipelineModule }    from './pipeline/pipeline.module'
 import { TasksModule }       from './tasks/tasks.module'
 import { CommunicationsModule } from './communications/communications.module'
-//import { EmailModule }       from './email/email.module'
+import { EmailModule }       from './email/email.module'
 import { DashboardModule }   from './dashboard/dashboard.module'
 import { CompaniesModule }  from './companies/companies.module'
 
@@ -23,7 +23,7 @@ import { CompaniesModule }  from './companies/companies.module'
     PipelineModule,
     TasksModule,
     CommunicationsModule,
-    //EmailModule,
+    EmailModule,
     DashboardModule,
   ],
   providers: [
