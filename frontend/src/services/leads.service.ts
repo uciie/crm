@@ -43,6 +43,9 @@ export const leadsService = {
   async update(id: string, payload: Partial<CreateLeadPayload>): Promise<Lead> {
     return api.patch(`/leads/${id}`, payload)
   },
+  async findOne(id: string): Promise<Lead> {
+    return api.get(`/leads/${id}`)
+  },
   // Changement de statut isolé du composant
   async updateStatus(id: string, status: Lead['status']): Promise<Lead> {
     return api.patch(`/leads/${id}`, { status })
