@@ -36,7 +36,7 @@ interface SupabaseJwtPayload {
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   constructor(private readonly config: ConfigService) {
     // Pour HS256, on récupère le secret brut sans transformations complexes
-      const secretOrKey = "v7waA5zAu0x03b/EWqAhjVlCOCTBoRZxYWYshZ2IL3670cJxCMZ3378Q37vhj7i9+07lmW/5UPY9jedVRRE1qw=="
+      const secretOrKey = config.getOrThrow<string>('SUPABASE_JWT_PUBLIC_KEY')
       console.log('[jwt.strategy] Using SUPABASE_SERVICE_ROLE_KEY for HS256 validation')
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
