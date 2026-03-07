@@ -11,9 +11,15 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Donne les droits d'écriture au token GITHUB_TOKEN par défaut
+    permissions:
+      contents: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          # Utilise le token avec les droits d'écriture pour pouvoir push
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Mermaid CLI
         run: npm install -g @mermaid-js/mermaid-cli
@@ -46,7 +52,7 @@ jobs:
               -b transparent
             echo "docs/mcd.png généré"
           else
-            echo "docs/mcd.mermaid introuvable, étape ignorée"
+            echo "WARN: docs/mcd.mermaid introuvable, étape ignorée"
           fi
 
       # ─── USE CASES ──────────────────────────────────────────────────────────
@@ -56,12 +62,12 @@ jobs:
           shopt -s nullglob
           files=(docs/use_cases/*.mermaid)
           if [ ${#files[@]} -eq 0 ]; then
-            echo "Aucun fichier dans docs/use_cases/, étape ignorée"
+            echo "WARN: Aucun fichier dans docs/use_cases/, étape ignorée"
             exit 0
           fi
           for file in "${files[@]}"; do
             output="${file%.mermaid}.png"
-            echo "Génération de $output"
+            echo "INFO: Génération de $output"
             mmdc \
               -p puppeteer-config.json \
               -i "$file" \
@@ -80,12 +86,12 @@ jobs:
           shopt -s nullglob
           files=(docs/sequences/*.mermaid)
           if [ ${#files[@]} -eq 0 ]; then
-            echo "Aucun fichier dans docs/sequences/, étape ignorée"
+            echo "WARN: Aucun fichier dans docs/sequences/, étape ignorée"
             exit 0
           fi
           for file in "${files[@]}"; do
             output="${file%.mermaid}.png"
-            echo "Génération de $output"
+            echo "INFO: Génération de $output"
             mmdc \
               -p puppeteer-config.json \
               -i "$file" \
