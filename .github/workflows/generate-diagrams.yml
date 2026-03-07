@@ -18,29 +18,96 @@ jobs:
       - name: Install Mermaid CLI
         run: npm install -g @mermaid-js/mermaid-cli
 
-      # Création d'un fichier de configuration pour Puppeteer
+      # Puppeteer config (désactive le sandbox requis sur GitHub Actions)
       - name: Create puppeteer-config.json
         run: echo '{"args":["--no-sandbox"]}' > puppeteer-config.json
 
-      - name: Generate PNG from docs/mcd.mermaid
+      # ─── Fonction de nettoyage ───────────────────────────────────────────────
+      # Certains éditeurs sauvegardent les fichiers .mermaid avec des fences
+      # ```mermaid ... ``` — mmdc n'accepte que le code brut, on les retire.
+      - name: Strip markdown fences from all .mermaid files
         run: |
-          if [ -f docs/mcd.mermaid ]; then
-            mmdc -p puppeteer-config.json -i docs/mcd.mermaid -o docs/mcd.png -t forest -b transparent
-          fi
-
-      - name: Generate PNGs from docs/sequences/*.mermaid
-        run: |
-          mkdir -p docs/sequences
-          for file in docs/sequences/*.mermaid; do
-            if [ -f "$file" ]; then
-              mmdc -p puppeteer-config.json -i "$file" -o "${file%.mermaid}.png" -t neutral
-            fi
+          find docs -name "*.mermaid" | while read file; do
+            # Supprime la ligne ouvrante ```mermaid (ou ```) et la ligne fermante ```
+            sed -i '/^```/d' "$file"
+            # Supprime les éventuelles lignes vides en début de fichier
+            sed -i '/./,$!d' "$file"
           done
 
-      - name: Commit and Push changes
+      # ─── MCD ────────────────────────────────────────────────────────────────
+      - name: Generate PNG — docs/mcd.mermaid
+        run: |
+          if [ -f docs/mcd.mermaid ]; then
+            mmdc \
+              -p puppeteer-config.json \
+              -i docs/mcd.mermaid \
+              -o docs/mcd.png \
+              -t forest \
+              -b transparent
+            echo "docs/mcd.png généré"
+          else
+            echo "docs/mcd.mermaid introuvable, étape ignorée"
+          fi
+
+      # ─── USE CASES ──────────────────────────────────────────────────────────
+      - name: Generate PNGs — docs/use_cases/*.mermaid
+        run: |
+          mkdir -p docs/use_cases
+          shopt -s nullglob
+          files=(docs/use_cases/*.mermaid)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "Aucun fichier dans docs/use_cases/, étape ignorée"
+            exit 0
+          fi
+          for file in "${files[@]}"; do
+            output="${file%.mermaid}.png"
+            echo "Génération de $output"
+            mmdc \
+              -p puppeteer-config.json \
+              -i "$file" \
+              -o "$output" \
+              -t dark \
+              -b transparent \
+              --width 1200 \
+              --height 900
+            echo "$output généré"
+          done
+
+      # ─── SÉQUENCES ──────────────────────────────────────────────────────────
+      - name: Generate PNGs — docs/sequences/*.mermaid
+        run: |
+          mkdir -p docs/sequences
+          shopt -s nullglob
+          files=(docs/sequences/*.mermaid)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "Aucun fichier dans docs/sequences/, étape ignorée"
+            exit 0
+          fi
+          for file in "${files[@]}"; do
+            output="${file%.mermaid}.png"
+            echo "Génération de $output"
+            mmdc \
+              -p puppeteer-config.json \
+              -i "$file" \
+              -o "$output" \
+              -t neutral \
+              -b transparent \
+              --width 1400 \
+              --height 1000
+            echo "$output généré"
+          done
+
+      # ─── COMMIT ─────────────────────────────────────────────────────────────
+      - name: Commit and push generated PNGs
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add docs/**/*.png
-          git commit -m "docs: update automated diagrams [skip ci]" || exit 0
-          git push
+          # Ajoute tous les PNG générés (use_cases, sequences, mcd)
+          git add docs/mcd.png docs/use_cases/*.png docs/sequences/*.png 2>/dev/null || true
+          # Ne commit que s'il y a des changements réels
+          if git diff --cached --quiet; then
+            echo "Aucun changement à commiter"
+          else
+            git commit -m "docs: update automated diagrams [skip ci]"
+            git push
+          fi
