@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { db } from '../database/db.config'
 import { companies, contacts, profiles } from '../database/schema'
+import type { IndustryType } from '../database/schema'
 import { eq, ilike, and, desc, sql, or } from 'drizzle-orm'
 import { CreateCompanyDto } from './dto/create-company.dto'
 
@@ -113,13 +114,17 @@ export class CompaniesService {
   }
 
   async create(dto: CreateCompanyDto, userId: string) {
-    const { annual_revenue, ...rest } = dto
+    const { annual_revenue, industry, ...rest } = dto
     const [newCompany] = await db
       .insert(companies)
       .values({
         ...rest,
         ...(annual_revenue !== undefined
           ? { annual_revenue: String(annual_revenue) }
+          : {}),
+        // Cast nécessaire : le DTO reçoit un string, Drizzle attend l'union littérale de l'enum
+        ...(industry !== undefined
+          ? { industry: industry as IndustryType }
           : {}),
         created_by: userId,
       })
@@ -129,13 +134,17 @@ export class CompaniesService {
   }
 
   async update(id: string, dto: Partial<CreateCompanyDto>) {
-    const { annual_revenue, ...rest } = dto
+    const { annual_revenue, industry, ...rest } = dto
     const [updated] = await db
       .update(companies)
       .set({
         ...rest,
         ...(annual_revenue !== undefined
           ? { annual_revenue: String(annual_revenue) }
+          : {}),
+        // Cast nécessaire : même raison que dans create()
+        ...(industry !== undefined
+          ? { industry: industry as IndustryType }
           : {}),
         updated_at: new Date(),
       })

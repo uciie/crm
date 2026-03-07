@@ -11,6 +11,18 @@ export const taskPriorityEnum      = pgEnum('task_priority',       ['basse', 'mo
 export const taskTypeEnum          = pgEnum('task_type',           ['tache', 'rappel', 'rendez-vous', 'appel'])
 export const communicationTypeEnum = pgEnum('communication_type',  ['email', 'appel', 'réunion', 'note', 'sms'])
 export const pipelineStageEnum     = pgEnum('pipeline_stage',      ['prospect', 'qualification', 'proposition', 'négociation', 'gagné', 'perdu'])
+export const industryEnum = pgEnum('industry_type', [
+  'Technologie', 
+  'Finance', 
+  'Sante', 
+  'Commerce de detail', 
+  'Industrie', 
+  'Immobilier', 
+  'Education', 
+  'Conseil', 
+  'Medias', 
+  'Autre'
+])
 
 // Table profiles
 export const profiles = pgTable('profiles', {
@@ -29,7 +41,7 @@ export const companies = pgTable('companies', {
   id:             uuid('id').primaryKey().defaultRandom(),
   name:           varchar('name', { length: 255 }).notNull(),
   domain:         varchar('domain', { length: 255 }).unique(),
-  industry:       varchar('industry', { length: 100 }),
+  industry:       industryEnum('industry').notNull().default('Autre'),
   size:           varchar('size', { length: 50 }),
   website:        text('website'),
   phone:          varchar('phone', { length: 20 }),
@@ -165,6 +177,7 @@ export const emailCampaigns = pgTable('email_campaigns', {
 })
 
 // Types inférés pour TypeScript
+export type IndustryType  = typeof industryEnum.enumValues[number]
 export type Profile       = typeof profiles.$inferSelect
 export type Company       = typeof companies.$inferSelect
 export type Contact       = typeof contacts.$inferSelect
