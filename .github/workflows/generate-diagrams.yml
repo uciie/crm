@@ -18,10 +18,14 @@ jobs:
       - name: Install Mermaid CLI
         run: npm install -g @mermaid-js/mermaid-cli
 
+      # Création d'un fichier de configuration pour Puppeteer
+      - name: Create puppeteer-config.json
+        run: echo '{"args":["--no-sandbox"]}' > puppeteer-config.json
+
       - name: Generate PNG from docs/mcd.mermaid
         run: |
           if [ -f docs/mcd.mermaid ]; then
-            mmdc -i docs/mcd.mermaid -o docs/mcd.png -t forest -b transparent
+            mmdc -p puppeteer-config.json -i docs/mcd.mermaid -o docs/mcd.png -t forest -b transparent
           fi
 
       - name: Generate PNGs from docs/sequences/*.mermaid
@@ -29,7 +33,7 @@ jobs:
           mkdir -p docs/sequences
           for file in docs/sequences/*.mermaid; do
             if [ -f "$file" ]; then
-              mmdc -i "$file" -o "${file%.mermaid}.png" -t neutral
+              mmdc -p puppeteer-config.json -i "$file" -o "${file%.mermaid}.png" -t neutral
             fi
           done
 
