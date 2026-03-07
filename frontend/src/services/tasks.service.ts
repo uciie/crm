@@ -53,23 +53,31 @@ export async function fetchTaskStats(): Promise<TaskStats> {
 }
 
 // ── Notifications ──────────────────────────────────────────────
-
-// FIX — fallback [] si /notifications n'existe pas encore (route non implémentée).
-// Retirer le try/catch une fois le module notifications créé côté NestJS.
+/**
+ * GET /notifications
+ * Récupère les notifications calculées depuis les tâches de l'utilisateur.
+ */
 export async function fetchNotifications(): Promise<AppNotification[]> {
-  try {
-    return await api.get<AppNotification[]>('/notifications')
-  } catch {
-    return []
-  }
+  return api.get('/notifications')
 }
 
-export async function markNotificationRead(id: string): Promise<AppNotification> {
-  return api.patch<AppNotification>(`/notifications/${id}/read`, {})
+/**
+ * PATCH /notifications/:id/read
+ * Marque une notification individuelle comme lue.
+ */
+export async function markNotificationRead(id: string): Promise<void> {
+  await api.patch(`/notifications/${id}/read`, {})
 }
 
-export async function markAllNotificationsRead(): Promise<{ count: number }> {
-  return api.patch('/notifications/read-all', {})
+/**
+ * PATCH /notifications/read-all
+ * Marque toutes les notifications comme lues.
+ * Passe les IDs au backend (qui ne recharge pas les notifs côté serveur).
+ */
+export async function markAllNotificationsRead(
+  ids: string[],
+): Promise<void> {
+  await api.patch('/notifications/read-all', { ids })
 }
 
 // ── Options pour les selects ───────────────────────────────────

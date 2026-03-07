@@ -139,20 +139,21 @@ export function useNotifications() {
 
   const markRead = useCallback(async (id: string) => {
     await markNotificationRead(id)
-    setNotifications((prev: AppNotification[]) =>
-      prev.map((n: AppNotification) => n.id === id ? { ...n, read: true } : n)
+  setNotifications(prev =>
+      prev.map(n => n.id === id ? { ...n, read: true } : n)
     )
   }, [])
 
+  // FIX — passe les IDs au backend (PATCH /notifications/read-all attend { ids })
   const markAllRead = useCallback(async () => {
-    await markAllNotificationsRead()
-    setNotifications((prev: AppNotification[]) =>
-      prev.map((n: AppNotification) => ({ ...n, read: true }))
-    )
-  }, [])
+    const ids = notifications.filter(n => !n.read).map(n => n.id)
+    if (ids.length === 0) return
+    await markAllNotificationsRead(ids)          // ← signature corrigée
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+  }, [notifications])
 
   const unreadCount = useMemo(
-    () => notifications.filter((n: AppNotification) => !n.read).length,
+    () => notifications.filter(n => !n.read).length,
     [notifications]
   )
 

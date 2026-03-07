@@ -1,29 +1,27 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // app/(crm)/tasks/page.tsx — Page principale Tâches & Calendrier
-// Utilise : Button, StatCardSkeleton, ToastContainer du projet
 // ─────────────────────────────────────────────────────────────────────────────
 
 'use client'
 
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import {
-  LayoutList, CalendarDays, Plus, RotateCw,
+  LayoutList, CalendarDays, Plus,
   Clock3, Layers, CheckCircle2, AlertTriangle, Zap,
 } from 'lucide-react'
-import { Button }         from '@/components/ui/Button'
+import { Button }           from '@/components/ui/Button'
 import { StatCardSkeleton } from '@/components/ui/Skeleton'
-import { ToastContainer } from '@/components/ui/Toast'
-import { CalendarView }       from '@/components/tasks/CalendarView'
-import { TaskList }           from '@/components/tasks/TaskList'
-import { TaskForm }           from '@/components/tasks/TaskForm'
-import { NotificationCenter } from '@/components/tasks/NotificationCenter'
-import { useTasks } from '@/hooks/useTasks'
+import { ToastContainer }   from '@/components/ui/Toast'
+import { CalendarView }     from '@/components/tasks/CalendarView'
+import { TaskList }         from '@/components/tasks/TaskList'
+import { TaskForm }         from '@/components/tasks/TaskForm'
+import { useTasks }         from '@/hooks/useTasks'
 import { isOverdue, isDueToday } from '@/lib/task-config'
-import { TaskStatus } from '@/types/index'
+import { TaskStatus }       from '@/types/index'
 import type { Task, TaskFormValues } from '@/types/index'
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Stat Card — design cohérent avec le système existant (bg-slate-900)
+// Stat Card
 // ─────────────────────────────────────────────────────────────────────────────
 
 function StatCard({
@@ -33,7 +31,7 @@ function StatCard({
   label:   string
   value:   number
   loading: boolean
-  accent:  string // classe couleur texte Tailwind
+  accent:  string
 }) {
   if (loading) return <StatCardSkeleton />
 
@@ -53,7 +51,7 @@ function StatCard({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Onglets de navigation
+// Onglets
 // ─────────────────────────────────────────────────────────────────────────────
 
 type Tab = 'list' | 'calendar'
@@ -62,8 +60,8 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
   return (
     <nav role="tablist" aria-label="Vues du module Tâches" className="flex items-center border border-slate-800">
       {([
-        { value: 'list',     label: 'Liste',       Icon: LayoutList   },
-        { value: 'calendar', label: 'Calendrier',  Icon: CalendarDays },
+        { value: 'list',     label: 'Liste',      Icon: LayoutList   },
+        { value: 'calendar', label: 'Calendrier', Icon: CalendarDays },
       ] as const).map(({ value, label, Icon }) => (
         <button
           key={value}
@@ -92,15 +90,12 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function TasksPage() {
-  const [tab,       setTab]       = useState<Tab>('list')
-  const [formOpen,  setFormOpen]  = useState(false)
-  const [editTask,  setEditTask]  = useState<Task | undefined>()
-  const [notifOpen, setNotifOpen] = useState(false)
+  const [tab,      setTab]      = useState<Tab>('list')
+  const [formOpen, setFormOpen] = useState(false)
+  const [editTask, setEditTask] = useState<Task | undefined>()
 
-  const { tasks, loading, refetch, create, update, remove, toggle } = useTasks()
+  const { tasks, loading, create, update, remove, toggle } = useTasks()
 
-  // Stats calculées localement — se mettent à jour instantanément à chaque
-  // changement de l'état tasks (toggle, create, delete) sans aller-retour API.
   const stats = useMemo(() => ({
     todo:        tasks.filter(t => t.status === TaskStatus.AFaire).length,
     in_progress: tasks.filter(t => t.status === TaskStatus.EnCours).length,
@@ -109,9 +104,7 @@ export default function TasksPage() {
     due_soon:    tasks.filter(t => isDueToday(t.due_date) && t.status !== TaskStatus.Terminee).length,
   }), [tasks])
 
-  // Synchronisation explicite — utile pour déboguer ou déclencher des effets secondaires
   useEffect(() => {
-    // Exemple : mise à jour du titre de l'onglet navigateur
     const overdue = stats.overdue
     document.title = overdue > 0
       ? `(${overdue}) Tâches & Agenda`
@@ -139,18 +132,13 @@ export default function TasksPage() {
     }
   }, [remove])
 
-  const handleNavigateToTask = useCallback((taskId: string) => {
-    const task = tasks.find(t => t.id === taskId)
-    if (task) handleEdit(task)
-  }, [tasks, handleEdit])
-
   return (
     <div className="min-h-screen bg-slate-950 text-slate-300">
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      {/* ── Header local — titre + bouton créer uniquement ─────────────────── */}
+      {/* Refresh et Notifications sont dans le Header global (layout) */}
       <header className="sticky top-0 z-40 bg-slate-950 border-b border-slate-800">
         <div className="max-w-screen-xl mx-auto flex items-center justify-between px-6 h-14 gap-4">
-          {/* Titre */}
           <div className="flex items-center gap-3">
             <div className="h-4 w-px bg-blue-500" />
             <div>
@@ -163,38 +151,14 @@ export default function TasksPage() {
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={refetch}
-              aria-label="Rafraîchir les données"
-              className={[
-                'h-9 w-9 flex items-center justify-center border border-slate-800',
-                'text-slate-600 hover:text-slate-400 hover:border-slate-700',
-                'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-                loading ? 'cursor-not-allowed opacity-50' : '',
-              ].join(' ')}
-              disabled={loading}
-            >
-              <RotateCw size={13} className={loading ? 'animate-spin' : ''} />
-            </button>
-
-            <NotificationCenter
-              open={notifOpen}
-              onToggle={() => setNotifOpen(o => !o)}
-              onClose={() => setNotifOpen(false)}
-              onNavigateToTask={handleNavigateToTask}
-            />
-
-            <Button
-              variant="primary"
-              size="sm"
-              icon={<Plus size={13} />}
-              onClick={handleCreate}
-            >
-              <span className="hidden sm:inline">Nouvelle tâche</span>
-            </Button>
-          </div>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Plus size={13} />}
+            onClick={handleCreate}
+          >
+            <span className="hidden sm:inline">Nouvelle tâche</span>
+          </Button>
         </div>
       </header>
 
@@ -206,44 +170,18 @@ export default function TasksPage() {
           aria-label="Statistiques des tâches"
           className="grid grid-cols-2 sm:grid-cols-4 gap-px border border-slate-800 bg-slate-800"
         >
-          <StatCard
-            icon={<Clock3 size={28} />}
-            label="À faire"
-            value={stats?.todo ?? 0}
-            loading={loading}
-            accent="text-blue-400"
-          />
-          <StatCard
-            icon={<Layers size={28} />}
-            label="En cours"
-            value={stats?.in_progress ?? 0}
-            loading={loading}
-            accent="text-sky-400"
-          />
-          <StatCard
-            icon={<CheckCircle2 size={28} />}
-            label="Terminées"
-            value={stats?.done ?? 0}
-            loading={loading}
-            accent="text-emerald-400"
-          />
-          <StatCard
-            icon={<AlertTriangle size={28} />}
-            label="En retard"
-            value={stats?.overdue ?? 0}
-            loading={loading}
-            accent="text-red-400"
-          />
+          <StatCard icon={<Clock3 size={28} />}       label="À faire"    value={stats.todo}        loading={loading} accent="text-blue-400"    />
+          <StatCard icon={<Layers size={28} />}        label="En cours"   value={stats.in_progress} loading={loading} accent="text-sky-400"     />
+          <StatCard icon={<CheckCircle2 size={28} />}  label="Terminées"  value={stats.done}        loading={loading} accent="text-emerald-400" />
+          <StatCard icon={<AlertTriangle size={28} />} label="En retard"  value={stats.overdue}     loading={loading} accent="text-red-400"     />
         </section>
 
         {/* Panel principal */}
         <div className="bg-slate-950 border border-slate-800">
-
-          {/* Barre onglets */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
             <TabBar active={tab} onChange={setTab} />
             <div className="flex items-center gap-3">
-              {stats?.due_soon !== undefined && stats.due_soon > 0 && (
+              {stats.due_soon > 0 && (
                 <span className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold text-amber-500 uppercase tracking-wide">
                   <Zap size={11} />
                   {stats.due_soon} à venir
@@ -255,7 +193,6 @@ export default function TasksPage() {
             </div>
           </div>
 
-          {/* Vue active */}
           <div
             role="tabpanel"
             aria-label={tab === 'list' ? 'Vue liste' : 'Vue calendrier'}
@@ -281,7 +218,6 @@ export default function TasksPage() {
         </div>
       </main>
 
-      {/* ── Formulaire ──────────────────────────────────────────────────────── */}
       <TaskForm
         open={formOpen}
         onClose={() => { setFormOpen(false); setEditTask(undefined) }}
@@ -289,7 +225,6 @@ export default function TasksPage() {
         task={editTask}
       />
 
-      {/* ── Toasts ────────────────────────────────────────────────────────── */}
       <ToastContainer />
     </div>
   )

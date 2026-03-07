@@ -1,10 +1,11 @@
 'use client'
 
-import { useState }           from 'react'
-import { usePathname, useRouter}        from 'next/navigation'
-import { Bell, Settings, ChevronDown, LogOut, User, RotateCw } from 'lucide-react'
-import { useAuth }            from '@/hooks/useAuth'
-import { cn }                 from '@/lib/utils'
+import { useState }                        from 'react'
+import { usePathname, useRouter }          from 'next/navigation'
+import { Settings, ChevronDown, LogOut, User, RotateCw } from 'lucide-react'
+import { useAuth }                         from '@/hooks/useAuth'
+import { NotificationCenter }             from '@/components/tasks/NotificationCenter'
+import { cn }                             from '@/lib/utils'
 
 // ── Route label map ─────────────────────────────────────────────
 
@@ -40,17 +41,21 @@ function getInitials(fullName: string): string {
 export function Header() {
   const pathname             = usePathname()
   const { profile, signOut } = useAuth()
-  const [menuOpen, setMenuOpen] = useState(false)
+  const [menuOpen,   setMenuOpen]   = useState(false)
+  const [notifOpen,  setNotifOpen]  = useState(false)
+  const [spinning,   setSpinning]   = useState(false)
 
   const label    = getRouteLabel(pathname)
   const initials = profile ? getInitials(profile.full_name) : '--'
 
   const router = useRouter()
-  const [spinning, setSpinning] = useState(false)
 
   const handleRefresh = () => {
     setSpinning(true)
-    router.push(pathname)
+    // router.refresh() force Next.js App Router à re-fetcher les Server Components
+    // et invalide le cache des données sans recharger toute la page.
+    // router.push() ne déclenchait rien car on était déjà sur la même route.
+    router.refresh()
     setTimeout(() => setSpinning(false), 800)
   }
 
@@ -62,31 +67,35 @@ export function Header() {
           {label}
         </p>
       </div>
-      <button
-        onClick={handleRefresh}
-        title="Actualiser la page"
-        className="p-1.5 text-slate-600 hover:text-slate-300 hover:bg-slate-800 border border-slate-800 hover:border-slate-600 transition-all"
-      >
-        <RotateCw className={`w-4 h-4 ${spinning ? 'animate-spin' : ''}`} />
-      </button>
 
       {/* Right actions */}
-      <div className="flex items-center gap-1">
-        {/* Notification bell */}
+      <div className="flex items-center gap-1.5">
+
+        {/* Rafraîchir */}
         <button
+          onClick={handleRefresh}
+          title="Actualiser la page"
+          disabled={spinning}
           className={cn(
-            'w-8 h-8 flex items-center justify-center',
-            'text-slate-600 hover:text-slate-300 hover:bg-slate-900',
-            'border border-transparent hover:border-slate-800',
-            'transition-all duration-150'
+            'w-8 h-8 flex items-center justify-center border',
+            'text-slate-600 hover:text-slate-300 hover:bg-slate-800',
+            'border-slate-800 hover:border-slate-600 transition-all',
+            spinning && 'opacity-50 cursor-not-allowed',
           )}
-          aria-label="Notifications"
         >
-          <Bell className="w-3.5 h-3.5" />
+          <RotateCw className={cn('w-3.5 h-3.5', spinning && 'animate-spin')} />
         </button>
 
+        {/* Notifications */}
+        <NotificationCenter
+          open={notifOpen}
+          onToggle={() => setNotifOpen(o => !o)}
+          onClose={() => setNotifOpen(false)}
+          onNavigateToTask={() => setNotifOpen(false)}
+        />
+
         {/* Divider */}
-        <div className="w-px h-4 bg-slate-800 mx-2" />
+        <div className="w-px h-4 bg-slate-800 mx-1" />
 
         {/* User menu */}
         <div className="relative">

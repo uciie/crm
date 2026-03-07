@@ -11,6 +11,7 @@ import { CommunicationsModule } from './communications/communications.module'
 import { EmailModule }       from './email/email.module'
 import { DashboardModule }   from './dashboard/dashboard.module'
 import { CompaniesModule }  from './companies/companies.module'
+import { NotificationsModule } from './notifications/notifications.module'
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { CompaniesModule }  from './companies/companies.module'
     CommunicationsModule,
     EmailModule,
     DashboardModule,
+    NotificationsModule,
   ],
   providers: [
     {
