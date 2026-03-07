@@ -6,7 +6,7 @@ sequenceDiagram
     participant DB as 🗄️ Supabase DB
 
     %% ─── CRÉER UN LEAD ───────────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over C,DB: ➕ Scénario 1 — Créer un lead
         C->>FE: Remplit formulaire (titre, valeur, probabilité, contact…)
         FE->>BE: POST /leads { title, value, probability, contact_id, company_id }
@@ -19,7 +19,7 @@ sequenceDiagram
     end
 
     %% ─── VOIR DÉTAIL + VALEUR PONDÉRÉE ──────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over C,DB: 📊 Scénario 2 — Détail lead + valeur pondérée
         C->>FE: Ouvre un lead
         FE->>BE: GET /leads/:id
@@ -34,7 +34,7 @@ sequenceDiagram
     end
 
     %% ─── CHANGER STATUT D'UN LEAD ────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over C,DB: 🔄 Scénario 3 — Changer le statut
         C->>FE: Sélectionne nouveau statut (Qualifié, Gagné, Perdu…)
         FE->>BE: PATCH /leads/:id { status: "won" }

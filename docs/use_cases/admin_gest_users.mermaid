@@ -1,48 +1,39 @@
-sequenceDiagram
-    autonumber
-    actor V as 👤 Visiteur
-    participant FE as 🌐 Next.js Frontend
-    participant BE as 🛠️ NestJS Backend
-    participant SA as 🔐 Supabase Auth
-    participant DB as 🗄️ Supabase DB
+graph TD
+    A(["🛡️ Administrateur"])
+    SA(["🔐 Supabase Auth"])
+    B(["📧 Brevo"])
 
-    %% ─── LOGIN ───────────────────────────────────────────
-    rect rgb(15, 23, 42)
-        Note over V,DB: 🔑 Scénario 1 — Login
-        V->>FE: Saisit email + mot de passe
-        FE->>SA: signInWithPassword(email, password)
-        SA-->>FE: { access_token, refresh_token, user }
-        FE->>BE: GET /auth/me (Authorization: Bearer <token>)
-        BE->>SA: verifyJWT(token)
-        SA-->>BE: payload { sub, role }
-        BE->>DB: SELECT * FROM profiles WHERE id = sub
-        DB-->>BE: profil utilisateur
-        BE-->>FE: { user, role, permissions }
-        FE-->>V: Redirige vers /dashboard
-    end
+    UC1["Lister les utilisateurs"]
+    UC2["Inviter un utilisateur (email)"]
+    UC3["Changer le rôle d'un utilisateur"]
+    UC4["Activer / Désactiver un compte"]
+    UC5["Supprimer un utilisateur"]
+    UC6["Voir les KPIs du dashboard"]
+    UC7["Envoyer email d'invitation"]
+    UC8["Créer le profil en base (insert)"]
+    UC9["Être authentifié comme Admin"]
 
-    %% ─── REGISTER ────────────────────────────────────────
-    rect rgb(15, 23, 42)
-        Note over V,DB: 📝 Scénario 2 — Inscription
-        V->>FE: Saisit email + mot de passe
-        FE->>SA: signUp(email, password)
-        SA->>V: Envoie email de confirmation
-        SA-->>FE: { user, session: null }
-        FE-->>V: "Vérifiez votre boite email"
-        V->>SA: Clique lien de confirmation (PKCE)
-        SA-->>FE: Échange code → access_token
-        FE->>DB: INSERT INTO profiles (id, full_name, role)
-        DB-->>FE: profil créé
-    end
+    A --> UC1
+    A --> UC2
+    A --> UC3
+    A --> UC4
+    A --> UC5
+    A --> UC6
 
-    %% ─── RESET PASSWORD ──────────────────────────────────
-    rect rgb(15, 23, 42)
-        Note over V,DB: 🔄 Scénario 3 — Reset mot de passe
-        V->>FE: Saisit son email
-        FE->>SA: resetPasswordForEmail(email)
-        SA->>V: Envoie email avec lien reset
-        V->>FE: Clique le lien, saisit nouveau mot de passe
-        FE->>SA: updateUser({ password })
-        SA-->>FE: { user } mis à jour
-        FE-->>V: "Mot de passe modifié, connectez-vous"
-    end
+    UC1 -.->|include| UC9
+    UC2 -.->|include| UC9
+    UC3 -.->|include| UC9
+    UC4 -.->|include| UC9
+    UC5 -.->|include| UC9
+    UC6 -.->|include| UC9
+
+    UC2 -.->|include| UC7
+    UC2 -.->|include| UC8
+
+    UC7 --> SA
+    UC5 --> SA
+    UC7 --> B
+
+    style A fill:#1e293b,stroke:#6366f1,color:#e2e8f0
+    style SA fill:#0f172a,stroke:#6366f1,color:#e2e8f0
+    style B fill:#0f172a,stroke:#34d399,color:#e2e8f0

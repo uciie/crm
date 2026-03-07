@@ -8,7 +8,7 @@ sequenceDiagram
     participant BR as 📧 Brevo
 
     %% ─── INVITER UN UTILISATEUR ──────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over A,BR: 📨 Scénario 1 — Inviter un utilisateur
         A->>FE: Saisit email + rôle de l'invité
         FE->>BE: POST /admin/users/invite { email, role }
@@ -24,7 +24,7 @@ sequenceDiagram
     end
 
     %% ─── CHANGER LE RÔLE ────────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over A,DB: 🔄 Scénario 2 — Changer le rôle d'un utilisateur
         A->>FE: Sélectionne nouveau rôle dans le select
         FE->>BE: PATCH /admin/users/:id { role: "admin" }
@@ -35,7 +35,7 @@ sequenceDiagram
     end
 
     %% ─── ACTIVER / DÉSACTIVER ────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over A,DB: 🔒 Scénario 3 — Activer / Désactiver un compte
         A->>FE: Toggle activation du compte
         FE->>BE: PATCH /admin/users/:id { is_active: false }
@@ -47,7 +47,7 @@ sequenceDiagram
     end
 
     %% ─── SUPPRIMER UN UTILISATEUR ────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over A,BR: 🗑️ Scénario 4 — Supprimer un utilisateur
         A->>FE: Clique "Supprimer" + confirme la modale
         FE->>BE: DELETE /admin/users/:id
@@ -60,7 +60,7 @@ sequenceDiagram
     end
 
     %% ─── DASHBOARD KPIs ──────────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over A,DB: 📊 Scénario 5 — Voir les KPIs du dashboard
         A->>FE: Accède à /admin/dashboard
         FE->>BE: GET /admin/kpis

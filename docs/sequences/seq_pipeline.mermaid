@@ -6,7 +6,7 @@ sequenceDiagram
     participant DB as 🗄️ Supabase DB
 
     %% ─── CHARGER LE KANBAN ───────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over C,DB: 🗂️ Scénario 1 — Charger le Kanban
         C->>FE: Accède à /pipeline
         FE->>BE: GET /pipeline/stages
@@ -21,7 +21,7 @@ sequenceDiagram
     end
 
     %% ─── DRAG & DROP ─────────────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over C,DB: 🖱️ Scénario 2 — Déplacer un deal (drag & drop)
         C->>FE: Glisse la carte vers une nouvelle colonne
         Note over FE: Mise à jour optimiste de l'UI
@@ -34,7 +34,7 @@ sequenceDiagram
     end
 
     %% ─── FILTRER LES DEALS ───────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over C,DB: 🔍 Scénario 3 — Filtrer les deals
         C->>FE: Applique filtre (assigné à moi, valeur > X…)
         FE->>BE: GET /pipeline/deals?assigned_to=me&min_value=5000

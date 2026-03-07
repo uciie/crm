@@ -6,7 +6,7 @@ sequenceDiagram
     participant DB as 🗄️ Supabase DB
 
     %% ─── CRÉER UNE TÂCHE ─────────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over C,DB: ➕ Scénario 1 — Créer une tâche
         C->>FE: Remplit formulaire (titre, type, priorité, date, contact…)
         FE->>BE: POST /tasks { title, type, priority, due_date, contact_id, assigned_to }
@@ -17,7 +17,7 @@ sequenceDiagram
     end
 
     %% ─── VUE CALENDRIER ──────────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over C,DB: 📅 Scénario 2 — Vue calendrier des tâches
         C->>FE: Bascule vers la vue Calendrier
         FE->>BE: GET /tasks?view=calendar&month=2024-03
@@ -29,7 +29,7 @@ sequenceDiagram
     end
 
     %% ─── KPIs + TÂCHES EN RETARD ─────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over C,DB: 📊 Scénario 3 — KPIs et tâches en retard
         C->>FE: Accède au dashboard tâches
         FE->>BE: GET /tasks/kpis
@@ -40,7 +40,7 @@ sequenceDiagram
     end
 
     %% ─── MARQUER TERMINÉE ────────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over C,DB: ✅ Scénario 4 — Marquer une tâche terminée
         C->>FE: Coche la tâche
         FE->>BE: PATCH /tasks/:id { status: "done" }

@@ -7,7 +7,7 @@ sequenceDiagram
     participant DB as 🗄️ Supabase DB
 
     %% ─── LOGIN ───────────────────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over V,DB: 🔑 Scénario 1 — Login
         V->>FE: Saisit email + mot de passe
         FE->>SA: signInWithPassword(email, password)
@@ -22,7 +22,7 @@ sequenceDiagram
     end
 
     %% ─── REGISTER ────────────────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over V,DB: 📝 Scénario 2 — Inscription
         V->>FE: Saisit email + mot de passe
         FE->>SA: signUp(email, password)
@@ -36,7 +36,7 @@ sequenceDiagram
     end
 
     %% ─── RESET PASSWORD ──────────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over V,DB: 🔄 Scénario 3 — Reset mot de passe
         V->>FE: Saisit son email
         FE->>SA: resetPasswordForEmail(email)

@@ -7,7 +7,7 @@ sequenceDiagram
     participant BR as 📧 Brevo API
 
     %% ─── CRÉER UNE CAMPAGNE ──────────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over A,BR: ➕ Scénario 1 — Créer et envoyer une campagne
         A->>FE: Remplit formulaire (sujet, template, liste contacts…)
         FE->>BE: POST /campaigns { subject, template_id, contact_list_ids }
@@ -26,7 +26,7 @@ sequenceDiagram
     end
 
     %% ─── SYNCHRONISER LES MÉTRIQUES ──────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over A,BR: 📊 Scénario 2 — Synchroniser les métriques
         A->>FE: Clique "Actualiser stats" sur une campagne
         FE->>BE: POST /campaigns/:id/sync
@@ -39,7 +39,7 @@ sequenceDiagram
     end
 
     %% ─── WEBHOOK BREVO ENTRANT ───────────────────────────
-    rect rgb(15, 23, 42)
+    rect rgb(0, 0, 0)
         Note over A,BR: 🔔 Scénario 3 — Webhook Brevo (événement entrant)
         BR->>BE: POST /webhooks/brevo { event: "unsubscribe", email, messageId }
         Note over BE: Vérifie signature HMAC du webhook
