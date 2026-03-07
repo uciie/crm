@@ -1,0 +1,51 @@
+sequenceDiagram
+    autonumber
+    actor C as 💼 Commercial
+    participant FE as 🌐 Next.js Frontend
+    participant BE as 🛠️ NestJS Backend
+    participant DB as 🗄️ Supabase DB
+
+    %% ─── CRÉER UNE TÂCHE ─────────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: ➕ Scénario 1 — Créer une tâche
+        C->>FE: Remplit formulaire (titre, type, priorité, date, contact…)
+        FE->>BE: POST /tasks { title, type, priority, due_date, contact_id, assigned_to }
+        BE->>DB: INSERT INTO tasks RETURNING *
+        DB-->>BE: tâche { id, title, status: "pending", priority, due_date }
+        BE-->>FE: 201 { task }
+        FE-->>C: Tâche visible dans la liste + calendrier
+    end
+
+    %% ─── VUE CALENDRIER ──────────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: 📅 Scénario 2 — Vue calendrier des tâches
+        C->>FE: Bascule vers la vue Calendrier
+        FE->>BE: GET /tasks?view=calendar&month=2024-03
+        BE->>DB: SELECT tasks WHERE due_date BETWEEN :start AND :end<br/>AND assigned_to = :userId
+        DB-->>BE: [{ id, title, due_date, status, priority }]
+        BE-->>FE: { tasks }
+        Note over FE: Positionne les tâches<br/>sur le calendrier selon due_date
+        FE-->>C: Calendrier avec tâches colorées par priorité
+    end
+
+    %% ─── KPIs + TÂCHES EN RETARD ─────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: 📊 Scénario 3 — KPIs et tâches en retard
+        C->>FE: Accède au dashboard tâches
+        FE->>BE: GET /tasks/kpis
+        BE->>DB: SELECT COUNT(*) FILTER (WHERE status='pending') AS pending,<br/>COUNT(*) FILTER (WHERE due_date < NOW() AND status != 'done') AS overdue
+        DB-->>BE: { pending, overdue, in_progress, done }
+        BE-->>FE: { kpis }
+        FE-->>C: Affiche compteurs KPIs (badges retard en rouge)
+    end
+
+    %% ─── MARQUER TERMINÉE ────────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: ✅ Scénario 4 — Marquer une tâche terminée
+        C->>FE: Coche la tâche
+        FE->>BE: PATCH /tasks/:id { status: "done" }
+        BE->>DB: UPDATE tasks SET status = "done", completed_at = NOW()
+        DB-->>BE: tâche mise à jour
+        BE-->>FE: 200 { task }
+        FE-->>C: Tâche barrée + KPIs recalculés
+    end

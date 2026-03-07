@@ -1,0 +1,47 @@
+sequenceDiagram
+    autonumber
+    actor C as 💼 Commercial
+    participant FE as 🌐 Next.js Frontend
+    participant BE as 🛠️ NestJS Backend
+    participant DB as 🗄️ Supabase DB
+
+    %% ─── CRÉER UN LEAD ───────────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: ➕ Scénario 1 — Créer un lead
+        C->>FE: Remplit formulaire (titre, valeur, probabilité, contact…)
+        FE->>BE: POST /leads { title, value, probability, contact_id, company_id }
+        BE->>DB: INSERT INTO leads RETURNING *
+        DB-->>BE: lead { id, title, status: "new", value, probability }
+        BE->>DB: INSERT INTO pipeline_deals (lead_id, stage_id="Nouveau")
+        DB-->>BE: deal créé
+        BE-->>FE: 201 { lead, deal }
+        FE-->>C: Redirige vers /leads/:id
+    end
+
+    %% ─── VOIR DÉTAIL + VALEUR PONDÉRÉE ──────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: 📊 Scénario 2 — Détail lead + valeur pondérée
+        C->>FE: Ouvre un lead
+        FE->>BE: GET /leads/:id
+        BE->>DB: SELECT lead JOIN contacts JOIN companies
+        DB-->>BE: { lead, contact, company }
+        FE->>BE: GET /leads/:id/communications
+        BE->>DB: SELECT communications WHERE lead_id = :id ORDER BY date DESC
+        DB-->>BE: [{ type, direction, content, date }]
+        BE-->>FE: données agrégées
+        Note over FE: Calcul côté client :<br/>valeur_pondérée = value × (probability / 100)
+        FE-->>C: Affiche fiche + timeline + valeur pondérée
+    end
+
+    %% ─── CHANGER STATUT D'UN LEAD ────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: 🔄 Scénario 3 — Changer le statut
+        C->>FE: Sélectionne nouveau statut (Qualifié, Gagné, Perdu…)
+        FE->>BE: PATCH /leads/:id { status: "won" }
+        BE->>DB: UPDATE leads SET status = "won" WHERE id = :id
+        DB-->>BE: lead mis à jour
+        BE->>DB: UPDATE pipeline_deals SET stage_id = <stage_gagné>
+        DB-->>BE: deal mis à jour
+        BE-->>FE: 200 { lead }
+        FE-->>C: Badge statut mis à jour + toast
+    end

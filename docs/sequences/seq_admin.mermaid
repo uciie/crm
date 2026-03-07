@@ -1,0 +1,71 @@
+sequenceDiagram
+    autonumber
+    actor A as 🛡️ Administrateur
+    participant FE as 🌐 Next.js Frontend
+    participant BE as 🛠️ NestJS Backend
+    participant DB as 🗄️ Supabase DB
+    participant SA as 🔐 Supabase Auth
+    participant BR as 📧 Brevo
+
+    %% ─── INVITER UN UTILISATEUR ──────────────────────────
+    rect rgb(15, 23, 42)
+        Note over A,BR: 📨 Scénario 1 — Inviter un utilisateur
+        A->>FE: Saisit email + rôle de l'invité
+        FE->>BE: POST /admin/users/invite { email, role }
+        BE->>SA: inviteUserByEmail(email)
+        SA->>A: Envoie email d'invitation (lien magic link)
+        SA-->>BE: { user: { id, email } }
+        BE->>DB: INSERT INTO profiles (id, role, is_active: true)
+        DB-->>BE: profil créé
+        BE->>BR: POST /smtp/email (email de bienvenue personnalisé)
+        BR-->>BE: { messageId }
+        BE-->>FE: 201 { user }
+        FE-->>A: Toast "Invitation envoyée à email@example.com"
+    end
+
+    %% ─── CHANGER LE RÔLE ────────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over A,DB: 🔄 Scénario 2 — Changer le rôle d'un utilisateur
+        A->>FE: Sélectionne nouveau rôle dans le select
+        FE->>BE: PATCH /admin/users/:id { role: "admin" }
+        BE->>DB: UPDATE profiles SET role = :role WHERE id = :id
+        DB-->>BE: profil mis à jour
+        BE-->>FE: 200 { user }
+        FE-->>A: Rôle mis à jour dans le tableau
+    end
+
+    %% ─── ACTIVER / DÉSACTIVER ────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over A,DB: 🔒 Scénario 3 — Activer / Désactiver un compte
+        A->>FE: Toggle activation du compte
+        FE->>BE: PATCH /admin/users/:id { is_active: false }
+        BE->>DB: UPDATE profiles SET is_active = false WHERE id = :id
+        DB-->>BE: mis à jour
+        Note over BE: Le middleware auth vérifie<br/>is_active à chaque requête
+        BE-->>FE: 200 { user }
+        FE-->>A: Compte désactivé (badge rouge)
+    end
+
+    %% ─── SUPPRIMER UN UTILISATEUR ────────────────────────
+    rect rgb(15, 23, 42)
+        Note over A,BR: 🗑️ Scénario 4 — Supprimer un utilisateur
+        A->>FE: Clique "Supprimer" + confirme la modale
+        FE->>BE: DELETE /admin/users/:id
+        BE->>DB: DELETE FROM profiles WHERE id = :id
+        DB-->>BE: OK
+        BE->>SA: admin.deleteUser(userId)
+        SA-->>BE: utilisateur supprimé de l'auth
+        BE-->>FE: 204 No Content
+        FE-->>A: Utilisateur retiré de la liste
+    end
+
+    %% ─── DASHBOARD KPIs ──────────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over A,DB: 📊 Scénario 5 — Voir les KPIs du dashboard
+        A->>FE: Accède à /admin/dashboard
+        FE->>BE: GET /admin/kpis
+        BE->>DB: SELECT COUNT(leads), SUM(value), COUNT(tasks WHERE overdue),<br/>COUNT(contacts), COUNT(campaigns) FROM ...
+        DB-->>BE: { total_leads, pipeline_value, overdue_tasks, contacts, campaigns }
+        BE-->>FE: { kpis }
+        FE-->>A: Dashboard avec métriques globales
+    end

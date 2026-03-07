@@ -1,0 +1,48 @@
+sequenceDiagram
+    autonumber
+    actor C as 💼 Commercial
+    participant FE as 🌐 Next.js Frontend
+    participant BE as 🛠️ NestJS Backend
+    participant DB as 🗄️ Supabase DB
+
+    %% ─── LISTER / FILTRER ────────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: 📋 Scénario 1 — Lister et filtrer les entreprises
+        C->>FE: Accède à /entreprises
+        FE->>BE: GET /companies?industry=tech&city=Paris
+        BE->>DB: SELECT companies WHERE industry = :industry AND city = :city
+        DB-->>BE: [{ id, name, domain, industry, city, annual_revenue }]
+        BE-->>FE: 200 { data: [...], total }
+        FE-->>C: Liste des entreprises avec filtres actifs
+    end
+
+    %% ─── CRÉER UNE ENTREPRISE ────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: ➕ Scénario 2 — Créer une entreprise
+        C->>FE: Remplit formulaire (nom, domaine, secteur, ville, CA…)
+        FE->>BE: POST /companies { name, domain, industry, city, annual_revenue }
+        BE->>DB: SELECT companies WHERE domain = :domain
+        DB-->>BE: [] (vérifie unicité du domaine)
+        BE->>DB: INSERT INTO companies RETURNING *
+        DB-->>BE: entreprise { id, name, domain }
+        BE-->>FE: 201 { company }
+        FE-->>C: Redirige vers /companies/:id
+    end
+
+    %% ─── VOIR DÉTAIL ─────────────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: 🔍 Scénario 3 — Détail entreprise + contacts + leads
+        C->>FE: Clique sur une entreprise
+        FE->>BE: GET /companies/:id
+        BE->>DB: SELECT company WHERE id = :id
+        DB-->>BE: { company }
+        FE->>BE: GET /companies/:id/contacts
+        BE->>DB: SELECT contacts WHERE company_id = :id
+        DB-->>BE: [{ id, first_name, last_name, email }]
+        FE->>BE: GET /companies/:id/leads
+        BE->>DB: SELECT leads WHERE company_id = :id
+        DB-->>BE: [{ id, title, status, value }]
+        Note over FE: Calcule statistiques :<br/>- nb contacts, nb leads actifs<br/>- valeur pipeline totale
+        BE-->>FE: données agrégées
+        FE-->>C: Fiche entreprise + onglets contacts/leads/stats
+    end

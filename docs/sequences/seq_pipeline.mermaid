@@ -1,0 +1,45 @@
+sequenceDiagram
+    autonumber
+    actor C as 💼 Commercial
+    participant FE as 🌐 Next.js Frontend
+    participant BE as 🛠️ NestJS Backend
+    participant DB as 🗄️ Supabase DB
+
+    %% ─── CHARGER LE KANBAN ───────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: 🗂️ Scénario 1 — Charger le Kanban
+        C->>FE: Accède à /pipeline
+        FE->>BE: GET /pipeline/stages
+        BE->>DB: SELECT pipeline_stages ORDER BY position
+        DB-->>BE: [{ id, name, color, position }]
+        FE->>BE: GET /pipeline/deals
+        BE->>DB: SELECT pipeline_deals JOIN leads JOIN contacts JOIN companies
+        DB-->>BE: [{ deal_id, lead, stage_id, value, contact }]
+        BE-->>FE: { stages, deals }
+        Note over FE: Groupe les deals par stage_id<br/>Calcule valeur totale par colonne
+        FE-->>C: Affiche Kanban avec colonnes et cartes
+    end
+
+    %% ─── DRAG & DROP ─────────────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: 🖱️ Scénario 2 — Déplacer un deal (drag & drop)
+        C->>FE: Glisse la carte vers une nouvelle colonne
+        Note over FE: Mise à jour optimiste de l'UI
+        FE->>BE: PATCH /pipeline/deals/:dealId { stage_id: "new_stage_id" }
+        BE->>DB: UPDATE pipeline_deals SET stage_id = :stage_id,<br/>entered_stage_at = NOW() WHERE id = :dealId
+        DB-->>BE: deal mis à jour
+        BE-->>FE: 200 { deal }
+        Note over FE: Confirme la mise à jour<br/>(ou rollback si erreur)
+        FE-->>C: Carte dans la nouvelle colonne, valeurs recalculées
+    end
+
+    %% ─── FILTRER LES DEALS ───────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: 🔍 Scénario 3 — Filtrer les deals
+        C->>FE: Applique filtre (assigné à moi, valeur > X…)
+        FE->>BE: GET /pipeline/deals?assigned_to=me&min_value=5000
+        BE->>DB: SELECT ... WHERE assigned_to = :userId AND value >= 5000
+        DB-->>BE: deals filtrés
+        BE-->>FE: { deals }
+        FE-->>C: Kanban mis à jour avec les deals filtrés
+    end

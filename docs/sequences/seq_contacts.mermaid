@@ -1,0 +1,56 @@
+sequenceDiagram
+    autonumber
+    actor C as 💼 Commercial
+    participant FE as 🌐 Next.js Frontend
+    participant BE as 🛠️ NestJS Backend
+    participant DB as 🗄️ Supabase DB
+
+    %% ─── LISTER / FILTRER ────────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: 📋 Scénario 1 — Lister & filtrer les contacts
+        C->>FE: Accède à /contacts
+        FE->>BE: GET /contacts?search=dupont&company=ACME
+        BE->>DB: SELECT contacts WHERE ... ORDER BY created_at DESC
+        DB-->>BE: [{ id, first_name, last_name, email, company }]
+        BE-->>FE: 200 { data: [...], total, page }
+        FE-->>C: Affiche liste paginée + filtres actifs
+    end
+
+    %% ─── CRÉER UN CONTACT ────────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: ➕ Scénario 2 — Créer un contact
+        C->>FE: Remplit formulaire (prénom, nom, email, société…)
+        FE->>BE: POST /contacts { first_name, last_name, email, company_id }
+        BE->>DB: INSERT INTO contacts RETURNING *
+        DB-->>BE: contact créé { id, ... }
+        BE-->>FE: 201 { contact }
+        FE-->>C: Toast "Contact créé" + redirige vers /contacts/:id
+    end
+
+    %% ─── VOIR DÉTAIL + TIMELINE ──────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: 🔍 Scénario 3 — Détail contact + timeline
+        C->>FE: Clique sur un contact
+        FE->>BE: GET /contacts/:id
+        BE->>DB: SELECT contact + JOIN companies
+        DB-->>BE: { contact, company }
+        FE->>BE: GET /contacts/:id/communications
+        BE->>DB: SELECT communications WHERE contact_id = :id ORDER BY date DESC
+        DB-->>BE: [{ type, direction, status, date, content }]
+        FE->>BE: GET /contacts/:id/leads
+        BE->>DB: SELECT leads WHERE contact_id = :id
+        DB-->>BE: [{ id, title, status, value }]
+        BE-->>FE: Toutes les données agrégées
+        FE-->>C: Affiche fiche contact + timeline + leads associés
+    end
+
+    %% ─── MODIFIER UN CONTACT ────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over C,DB: ✏️ Scénario 4 — Modifier un contact
+        C->>FE: Modifie champs dans le formulaire
+        FE->>BE: PATCH /contacts/:id { email, phone... }
+        BE->>DB: UPDATE contacts SET ... WHERE id = :id RETURNING *
+        DB-->>BE: contact mis à jour
+        BE-->>FE: 200 { contact }
+        FE-->>C: Toast "Contact mis à jour"
+    end

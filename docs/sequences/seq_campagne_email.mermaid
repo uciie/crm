@@ -1,0 +1,55 @@
+sequenceDiagram
+    autonumber
+    actor A as 🛡️ Administrateur
+    participant FE as 🌐 Next.js Frontend
+    participant BE as 🛠️ NestJS Backend
+    participant DB as 🗄️ Supabase DB
+    participant BR as 📧 Brevo API
+
+    %% ─── CRÉER UNE CAMPAGNE ──────────────────────────────
+    rect rgb(15, 23, 42)
+        Note over A,BR: ➕ Scénario 1 — Créer et envoyer une campagne
+        A->>FE: Remplit formulaire (sujet, template, liste contacts…)
+        FE->>BE: POST /campaigns { subject, template_id, contact_list_ids }
+        BE->>DB: SELECT contacts WHERE id IN (...) AND is_subscribed = true
+        DB-->>BE: [{ email, first_name, last_name }]
+        BE->>BR: POST /emailCampaigns { name, subject, sender, recipients }
+        BR-->>BE: { id: brevo_campaign_id, status: "draft" }
+        BE->>DB: INSERT INTO email_campaigns (title, brevo_campaign_id, status)
+        DB-->>BE: campagne enregistrée
+        BE->>BR: POST /emailCampaigns/:id/sendNow
+        BR-->>BE: { message: "Scheduled" }
+        BE->>DB: UPDATE email_campaigns SET status = "sent", sent_at = NOW()
+        DB-->>BE: OK
+        BE-->>FE: 201 { campaign }
+        FE-->>A: Toast "Campagne envoyée"
+    end
+
+    %% ─── SYNCHRONISER LES MÉTRIQUES ──────────────────────
+    rect rgb(15, 23, 42)
+        Note over A,BR: 📊 Scénario 2 — Synchroniser les métriques
+        A->>FE: Clique "Actualiser stats" sur une campagne
+        FE->>BE: POST /campaigns/:id/sync
+        BE->>BR: GET /emailCampaigns/:brevo_id (statistics)
+        BR-->>BE: { openRate, clickRate, bounceRate, unsubscribeCount }
+        BE->>DB: UPDATE email_campaigns SET open_rate, click_rate, bounce_rate
+        DB-->>BE: mis à jour
+        BE-->>FE: 200 { stats }
+        FE-->>A: Statistiques mises à jour dans le tableau de bord
+    end
+
+    %% ─── WEBHOOK BREVO ENTRANT ───────────────────────────
+    rect rgb(15, 23, 42)
+        Note over A,BR: 🔔 Scénario 3 — Webhook Brevo (événement entrant)
+        BR->>BE: POST /webhooks/brevo { event: "unsubscribe", email, messageId }
+        Note over BE: Vérifie signature HMAC du webhook
+        BE->>DB: SELECT contacts WHERE email = :email
+        DB-->>BE: { contact_id }
+        BE->>DB: UPDATE contacts SET is_subscribed = false WHERE email = :email
+        DB-->>BE: contact mis à jour
+        alt event == "delivered" ou "opened" ou "clicked"
+            BE->>DB: INSERT INTO communications (type, brevo_message_id, status, contact_id)
+            DB-->>BE: communication enregistrée
+        end
+        BE-->>BR: 200 OK
+    end
