@@ -1,0 +1,42 @@
+name: Generate Mermaid Diagrams
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**/*.mermaid'
+      - 'README.md'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install Mermaid CLI
+        run: npm install -g @mermaid-js/mermaid-cli
+
+      - name: Generate PNG from docs/mcd.mermaid
+        run: |
+          if [ -f docs/mcd.mermaid ]; then
+            mmdc -i docs/mcd.mermaid -o docs/mcd.png -t forest -b transparent
+          fi
+
+      - name: Generate PNGs from docs/sequences/*.mermaid
+        run: |
+          mkdir -p docs/sequences
+          for file in docs/sequences/*.mermaid; do
+            if [ -f "$file" ]; then
+              mmdc -i "$file" -o "${file%.mermaid}.png" -t neutral
+            fi
+          done
+
+      - name: Commit and Push changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add docs/**/*.png
+          git commit -m "docs: update automated diagrams [skip ci]" || exit 0
+          git push
