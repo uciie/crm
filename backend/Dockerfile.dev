@@ -1,7 +1,16 @@
 FROM node:20-alpine
+
+RUN apk add --no-cache tini
+
 WORKDIR /app
+
 COPY package*.json ./
 RUN npm install
+
 COPY . .
+
 EXPOSE 3001
+
+# FIX — utilise tini comme init process
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["npm", "run", "start:dev"]

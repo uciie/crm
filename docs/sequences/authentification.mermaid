@@ -1,0 +1,31 @@
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Utilisateur
+    participant FE as Frontend Next.js
+    participant MW as middleware.ts
+    participant SA as Supabase Auth
+    participant BE as Backend NestJS
+    participant DB as PostgreSQL
+
+    User->>FE: Saisie email + mot de passe
+    FE->>SA: supabase.auth.signInWithPassword()
+    SA-->>FE: { access_token (JWT), refresh_token }
+    FE->>FE: Stockage JWT dans cookie httpOnly
+
+    Note over FE,MW: Requête vers une page protégée
+
+    User->>MW: GET /dashboard
+    MW->>SA: Vérifie + rafraîchit la session
+    SA-->>MW: Session valide / token renouvelé
+    MW-->>FE: Laisse passer la requête
+
+    Note over FE,BE: Appel API avec le JWT
+
+    FE->>BE: GET /dashboard/kpis\nAuthorization: Bearer <JWT>
+    BE->>BE: JwtAuthGuard valide la signature\n(SUPABASE_JWT_SECRET)
+    BE->>DB: Requêtes SQL agrégées\n(filtrées par userId/role)
+    DB-->>BE: Données KPIs
+    BE-->>FE: { revenue_this_month, conversion_rate, … }
+    FE-->>User: Affichage du dashboard
+```

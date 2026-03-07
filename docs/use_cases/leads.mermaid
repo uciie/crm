@@ -1,0 +1,37 @@
+graph TD
+    V(["👤 Visiteur"])
+    SA(["🔐 Supabase Auth"])
+
+    UC1["Se connecter (Login)"]
+    UC2["S'inscrire (Register)"]
+    UC3["Réinitialiser mot de passe"]
+    UC4["Mettre à jour mot de passe"]
+    UC5["Se déconnecter (Logout)"]
+    UC6["Vérifier JWT / Session"]
+    UC7["Échanger code PKCE → Session"]
+    UC8["Envoyer email de confirmation"]
+    UC9["Envoyer email de reset"]
+
+    V --> UC1
+    V --> UC2
+    V --> UC3
+    V --> UC4
+    V --> UC5
+
+    UC1 -.->|include| UC6
+    UC3 -.->|include| UC9
+    UC4 -.->|include| UC7
+
+    UC1 --> SA
+    UC2 --> SA
+    UC3 --> SA
+    UC4 --> SA
+    UC5 --> SA
+
+    SA --> UC6
+    SA --> UC7
+    SA --> UC8
+    SA --> UC9
+
+    style V fill:#1e293b,stroke:#3b82f6,color:#e2e8f0
+    style SA fill:#0f172a,stroke:#6366f1,color:#e2e8f0

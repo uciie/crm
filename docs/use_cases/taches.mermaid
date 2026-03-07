@@ -1,0 +1,45 @@
+graph TD
+    C(["💼 Commercial"])
+    A(["🛡️ Administrateur"])
+    U(["👤 Utilisateur"])
+
+    UC1["Lister les tâches (vue Liste)"]
+    UC2["Voir le calendrier des tâches"]
+    UC3["Créer une tâche"]
+    UC4["Modifier une tâche"]
+    UC5["Supprimer une tâche"]
+    UC6["Marquer une tâche terminée"]
+    UC7["Voir les KPIs (retard, en cours…)"]
+    UC8["Recevoir une notification de retard"]
+    UC9["Être authentifié"]
+
+    C --> UC1
+    C --> UC2
+    C --> UC3
+    C --> UC4
+    C --> UC6
+    C --> UC7
+
+    A --> UC1
+    A --> UC2
+    A --> UC3
+    A --> UC5
+    A --> UC7
+
+    U --> UC1
+    U --> UC2
+    U --> UC6
+
+    UC1 -.->|include| UC9
+    UC2 -.->|include| UC9
+    UC3 -.->|include| UC9
+    UC4 -.->|include| UC9
+    UC5 -.->|include| UC9
+    UC6 -.->|include| UC9
+
+    UC1 -.->|extend| UC8
+    UC7 -.->|include| UC1
+
+    style C fill:#1e293b,stroke:#f59e0b,color:#e2e8f0
+    style A fill:#1e293b,stroke:#6366f1,color:#e2e8f0
+    style U fill:#1e293b,stroke:#94a3b8,color:#e2e8f0

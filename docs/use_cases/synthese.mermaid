@@ -1,0 +1,45 @@
+graph TD
+    V(["👤 Visiteur"])
+    U(["👤 Utilisateur"])
+    C(["💼 Commercial"])
+    A(["🛡️ Administrateur"])
+    SA(["🔐 Supabase Auth"])
+    BR(["📧 Brevo"])
+
+    MOD1["📋 Module Accès\n(Login / Register / Reset)"]
+    MOD2["👥 Module Contacts"]
+    MOD3["🏢 Module Entreprises"]
+    MOD4["📈 Module Leads"]
+    MOD5["🔀 Module Pipeline"]
+    MOD6["✅ Module Tâches"]
+    MOD7["📧 Module Campagnes"]
+    MOD8["⚙️ Module Administration"]
+
+    V --> MOD1
+    U --> MOD2
+    U --> MOD6
+    C --> MOD2
+    C --> MOD3
+    C --> MOD4
+    C --> MOD5
+    C --> MOD6
+    C --> MOD7
+    A --> MOD2
+    A --> MOD3
+    A --> MOD4
+    A --> MOD5
+    A --> MOD6
+    A --> MOD7
+    A --> MOD8
+
+    MOD1 --- SA
+    MOD7 --- BR
+    MOD8 --- SA
+    MOD8 --- BR
+
+    style V fill:#1e293b,stroke:#94a3b8,color:#e2e8f0
+    style U fill:#1e293b,stroke:#94a3b8,color:#e2e8f0
+    style C fill:#1e293b,stroke:#f59e0b,color:#e2e8f0
+    style A fill:#1e293b,stroke:#6366f1,color:#e2e8f0
+    style SA fill:#0f172a,stroke:#6366f1,color:#e2e8f0
+    style BR fill:#0f172a,stroke:#34d399,color:#e2e8f0

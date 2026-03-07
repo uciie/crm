@@ -1,7 +1,19 @@
 FROM node:20-alpine
+
+RUN apk add --no-cache tini
+
 WORKDIR /app
+
+# Installe les dépendances en premier pour profiter du cache Docker.
+# Le layer npm install n'est rebuilté que si package.json change —
+# c'est ce que `action: rebuild` dans docker-compose.yml déclenche.
 COPY package*.json ./
 RUN npm install
+
 COPY . .
+
+# Le port est surchargé par chaque service dans docker-compose.yml
 EXPOSE 3000
+
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["npm", "run", "dev"]

@@ -1,0 +1,39 @@
+graph TD
+    A(["🛡️ Administrateur"])
+    SA(["🔐 Supabase Auth"])
+    B(["📧 Brevo"])
+
+    UC1["Lister les utilisateurs"]
+    UC2["Inviter un utilisateur (email)"]
+    UC3["Changer le rôle d'un utilisateur"]
+    UC4["Activer / Désactiver un compte"]
+    UC5["Supprimer un utilisateur"]
+    UC6["Voir les KPIs du dashboard"]
+    UC7["Envoyer email d'invitation"]
+    UC8["Créer le profil en base (insert)"]
+    UC9["Être authentifié comme Admin"]
+
+    A --> UC1
+    A --> UC2
+    A --> UC3
+    A --> UC4
+    A --> UC5
+    A --> UC6
+
+    UC1 -.->|include| UC9
+    UC2 -.->|include| UC9
+    UC3 -.->|include| UC9
+    UC4 -.->|include| UC9
+    UC5 -.->|include| UC9
+    UC6 -.->|include| UC9
+
+    UC2 -.->|include| UC7
+    UC2 -.->|include| UC8
+
+    UC7 --> SA
+    UC5 --> SA
+    UC7 --> B
+
+    style A fill:#1e293b,stroke:#6366f1,color:#e2e8f0
+    style SA fill:#0f172a,stroke:#6366f1,color:#e2e8f0
+    style B fill:#0f172a,stroke:#34d399,color:#e2e8f0

@@ -1,9 +1,55 @@
-# docker-compose.yml — Environnement de développement local CRM SaaS
-# Lance le frontend Next.js + backend NestJS en un seul commande : docker compose up
-
-version: '3.9'
+# docker-compose.yml - Environnement de développement local CRM SaaS
+#
+# Deux modes disponibles :
+#
+#   docker compose up --build 
+#   docker compose watch 
 
 services:
+
+  # ──────────────────────────────────────────
+  # Backend NestJS
+  # ──────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - '3001:3001'
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    env_file:
+      - ./backend/.env
+    environment:
+      - PORT=3001
+      - NODE_ENV=development
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
+      - BREVO_API_KEY=${BREVO_API_KEY}
+      - CHOKIDAR_USEPOLLING=true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # ── Watch natif Docker Compose ──────────────────────────────────────────
+    develop:
+      watch:
+        # Synchronise les fichiers sources sans rebuild
+        - action: sync
+          path: ./backend/src
+          target: /app/src
+          ignore:
+            - node_modules/
+        # Rebuild uniquement si package.json change (nouvelle dépendance)
+        - action: rebuild
+          path: ./backend/package.json
+    networks:
+      - crm-network
+
   # ──────────────────────────────────────────
   # Frontend Next.js
   # ──────────────────────────────────────────
@@ -22,33 +68,29 @@ services:
     environment:
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-      - NEXT_PUBLIC_API_URL=http://backend:3001
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      - API_INTERNAL_URL=http://backend:3001
+      - WATCHPACK_POLLING=true
+      - CHOKIDAR_USEPOLLING=true
     depends_on:
-      - backend
-    networks:
-      - crm-network
-
-  # ──────────────────────────────────────────
-  # Backend NestJS
-  # ──────────────────────────────────────────
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
-    ports:
-      - '3001:3001'
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
-    env_file:
-      - ./backend/.env
-    environment:
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
-      - BREVO_API_KEY=${BREVO_API_KEY}
-      - PORT=3001
-      - NODE_ENV=development
+      backend:
+        condition: service_healthy
+    # ── Watch natif Docker Compose ──────────────────────────────────────────
+    develop:
+      watch:
+        # Synchronise tout le code source
+        - action: sync
+          path: ./frontend/src
+          target: /app/src
+          ignore:
+            - node_modules/
+        # Synchronise les fichiers de config Next.js (tailwind, tsconfig…)
+        - action: sync
+          path: ./frontend/public
+          target: /app/public
+        # Rebuild si les dépendances changent
+        - action: rebuild
+          path: ./frontend/package.json
     networks:
       - crm-network
 

@@ -1,0 +1,30 @@
+graph TD
+    C(["💼 Commercial"])
+    A(["🛡️ Administrateur"])
+
+    UC1["Visualiser le Kanban par étape"]
+    UC2["Déplacer un deal (drag & drop)"]
+    UC3["Créer un lead depuis le pipeline"]
+    UC4["Voir la valeur totale par colonne"]
+    UC5["Filtrer les deals"]
+    UC6["Être authentifié"]
+
+    C --> UC1
+    C --> UC2
+    C --> UC3
+    C --> UC4
+
+    A --> UC1
+    A --> UC2
+    A --> UC3
+    A --> UC4
+
+    UC1 -.->|include| UC6
+    UC2 -.->|include| UC6
+    UC3 -.->|include| UC6
+
+    UC1 -.->|extend| UC5
+    UC2 -.->|include| UC1
+
+    style C fill:#1e293b,stroke:#f59e0b,color:#e2e8f0
+    style A fill:#1e293b,stroke:#6366f1,color:#e2e8f0

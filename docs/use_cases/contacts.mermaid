@@ -1,0 +1,40 @@
+graph TD
+    C(["💼 Commercial"])
+    A(["🛡️ Administrateur"])
+
+    UC1["Lister les contacts"]
+    UC2["Rechercher / filtrer les contacts"]
+    UC3["Voir le détail d'un contact"]
+    UC4["Créer un contact"]
+    UC5["Modifier un contact"]
+    UC6["Supprimer un contact"]
+    UC7["Voir la timeline d'interactions"]
+    UC8["Ajouter une interaction (note, appel, email…)"]
+    UC9["Voir les leads associés"]
+    UC10["Être authentifié"]
+
+    C --> UC1
+    C --> UC3
+    C --> UC4
+    C --> UC5
+    C --> UC7
+    C --> UC8
+    C --> UC9
+
+    A --> UC1
+    A --> UC3
+    A --> UC6
+
+    UC1 -.->|include| UC10
+    UC2 -.->|include| UC10
+    UC3 -.->|include| UC10
+    UC4 -.->|include| UC10
+    UC5 -.->|include| UC10
+    UC6 -.->|include| UC10
+
+    UC1 -.->|extend| UC2
+    UC3 -.->|include| UC7
+    UC3 -.->|include| UC9
+
+    style C fill:#1e293b,stroke:#f59e0b,color:#e2e8f0
+    style A fill:#1e293b,stroke:#6366f1,color:#e2e8f0

@@ -1,0 +1,33 @@
+graph TD
+    C(["💼 Commercial"])
+    A(["🛡️ Administrateur"])
+
+    UC1["Lister les leads"]
+    UC2["Voir le détail d'un lead"]
+    UC3["Créer un lead"]
+    UC4["Modifier un lead (statut, valeur…)"]
+    UC5["Supprimer un lead"]
+    UC6["Voir la timeline des communications"]
+    UC7["Calculer valeur pondérée"]
+    UC8["Être authentifié"]
+
+    C --> UC1
+    C --> UC2
+    C --> UC3
+    C --> UC4
+
+    A --> UC1
+    A --> UC2
+    A --> UC5
+
+    UC1 -.->|include| UC8
+    UC2 -.->|include| UC8
+    UC3 -.->|include| UC8
+    UC4 -.->|include| UC8
+    UC5 -.->|include| UC8
+
+    UC2 -.->|include| UC6
+    UC2 -.->|include| UC7
+
+    style C fill:#1e293b,stroke:#f59e0b,color:#e2e8f0
+    style A fill:#1e293b,stroke:#6366f1,color:#e2e8f0

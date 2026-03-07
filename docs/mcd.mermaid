@@ -1,0 +1,78 @@
+erDiagram
+    PROFILES ||--o{ COMPANIES : "created_by"
+    PROFILES ||--o{ CONTACTS : "assigned_to / created_by"
+    PROFILES ||--o{ LEADS : "assigned_to / created_by"
+    PROFILES ||--o{ TASKS : "assigned_to / created_by"
+    PROFILES ||--o{ COMMUNICATIONS : "created_by"
+    PROFILES ||--o{ EMAIL_CAMPAIGNS : "created_by"
+
+    COMPANIES ||--o{ CONTACTS : "company_id"
+    COMPANIES ||--o{ LEADS : "company_id"
+    
+    CONTACTS ||--o{ LEADS : "contact_id"
+    CONTACTS ||--o{ TASKS : "contact_id"
+    
+    LEADS ||--o{ PIPELINE_DEALS : "lead_id"
+    PIPELINE_STAGES ||--o{ PIPELINE_DEALS : "stage_id"
+
+    PROFILES {
+        uuid id PK
+        string full_name "Non_Nullable"
+        user_role role "Non_Nullable"
+        boolean is_active "Non_Nullable"
+    }
+
+    COMPANIES {
+        uuid id PK
+        string name "Non_Nullable"
+        string domain UK
+        industry_type industry "Nullable"
+        string city "Nullable"
+        numeric annual_revenue "Nullable"
+        uuid created_by FK
+    }
+
+    CONTACTS {
+        uuid id PK
+        string first_name "Non_Nullable"
+        string last_name "Non_Nullable"
+        string email UK
+        uuid company_id FK
+        boolean is_subscribed "Non_Nullable"
+    }
+
+    LEADS {
+        uuid id PK
+        string title "Non_Nullable"
+        lead_status status "Non_Nullable"
+        numeric value "Nullable"
+        int probability "0_to_100"
+        uuid contact_id FK
+        uuid company_id FK
+    }
+
+    TASKS {
+        uuid id PK
+        string title "Non_Nullable"
+        task_status status "Non_Nullable"
+        task_priority priority "Non_Nullable"
+        task_type type "Non_Nullable"
+        timestamp due_date "Nullable"
+        uuid assigned_to FK
+    }
+
+    COMMUNICATIONS {
+        uuid id PK
+        comm_type type "Non_Nullable"
+        string direction "entrant_sortant"
+        string status "Non_Nullable"
+        string brevo_message_id UK
+        uuid contact_id FK
+    }
+
+    PIPELINE_DEALS {
+        uuid id PK
+        uuid lead_id FK
+        uuid stage_id FK
+        timestamp entered_stage_at "Non_Nullable"
+    }
