@@ -50,7 +50,7 @@ export function Header() {
 
   const handleRefresh = () => {
     setSpinning(true)
-    router.refresh()
+    router.push(pathname)
     setTimeout(() => setSpinning(false), 800)
   }
 

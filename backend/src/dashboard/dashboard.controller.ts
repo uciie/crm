@@ -9,8 +9,8 @@ export class DashboardController {
 
   // GET /dashboard/kpis
   @Get('kpis')
-  getKpis(@Request() req: any) {
-    return this.dashboardService.getKpis(req.user.id, req.user.role)
+  getKpis(@Request() req, @Query('startDate') startDate?: string, @Query('endDate') endDate?: string) {
+    return this.dashboardService.getKpis(req.user.id, req.user.role, startDate, endDate)
   }
 
   // GET /dashboard/leads-by-status

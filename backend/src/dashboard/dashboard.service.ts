@@ -5,7 +5,7 @@ import { eq, and, gte, sql, desc } from 'drizzle-orm'
 
 @Injectable()
 export class DashboardService {
-  async getKpis(userId: string, role: string) {
+  async getKpis(userId: string, role: string, startDate?: string, endDate?: string) {
     const isAdmin = role === 'admin'
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
 
