@@ -7,7 +7,7 @@ export function ContactFilters({ search, onSearch }: ContactFiltersProps) {
   return (
     <div className="flex gap-3 items-center">
       <div className="relative flex-1 max-w-md">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></span>
         <input
           type="text" value={search} onChange={e => onSearch(e.target.value)}
           placeholder="Rechercher par nom, email, entreprise..."

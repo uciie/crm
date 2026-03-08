@@ -7,6 +7,7 @@ import { StatsCard }                from '@/components/dashboard/StatsCard'
 import { ConversionChart }          from '@/components/dashboard/ConversionChart'
 import { ActivityFeed }             from '@/components/dashboard/ActivityFeed'
 import { formatCurrency }           from '@/lib/utils'
+import { calculateTrend }           from '@/utils/transformers'
 import type { DashboardKpis }       from '@/types'
 
 const FUNNEL_COLORS: Record<string, string> = {
@@ -50,6 +51,12 @@ export default function DashboardPage() {
     value: Number(s.total_value), color: FUNNEL_COLORS[s.status] ?? '#94a3b8',
   }))
 
+  // Calcul des tendances — null si pas de données sur la période précédente
+  const trendRevenue    = kpis ? calculateTrend(kpis.revenue_this_month, kpis.prev_revenue)         : null
+  const trendConversion = kpis ? calculateTrend(kpis.conversion_rate,    kpis.prev_conversion_rate) : null
+  const trendOverdue    = kpis ? calculateTrend(kpis.overdue_tasks,      kpis.prev_overdue_tasks)   : null
+  const trendContacts   = kpis ? calculateTrend(kpis.new_contacts,       kpis.prev_new_contacts)    : null
+
   return (
     <div className="p-6 space-y-6">
       <div>
@@ -61,10 +68,34 @@ export default function DashboardPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard label="CA ce mois"         value={kpis ? formatCurrency(kpis.revenue_this_month) : '—'} color="#6366f1" sub="+12% vs mois dernier" loading={loading} />
-        <StatsCard label="Taux de conversion" value={kpis ? `${kpis.conversion_rate}%` : '—'}              color="#34d399" sub="Leads gagnés / total"  loading={loading} />
-        <StatsCard label="Tâches en retard"   value={kpis?.overdue_tasks ?? '—'}                           color="#f87171" sub="À traiter en priorité" loading={loading} />
-        <StatsCard label="Nouveaux contacts"  value={kpis?.new_contacts  ?? '—'}                           color="#f59e0b" sub="Ce mois-ci"             loading={loading} />
+        <StatsCard
+          label="CA ce mois"
+          value={kpis ? formatCurrency(kpis.revenue_this_month) : '—'}
+          color="#6366f1"
+          trendValue={trendRevenue}
+          loading={loading}
+        />
+        <StatsCard
+          label="Taux de conversion"
+          value={kpis ? `${kpis.conversion_rate}%` : '—'}
+          color="#34d399"
+          trendValue={trendConversion}
+          loading={loading}
+        />
+        <StatsCard
+          label="Tâches en retard"
+          value={kpis?.overdue_tasks ?? '—'}
+          color="#f87171"
+          trendValue={trendOverdue}
+          loading={loading}
+        />
+        <StatsCard
+          label="Nouveaux contacts"
+          value={kpis?.new_contacts ?? '—'}
+          color="#f59e0b"
+          trendValue={trendContacts}
+          loading={loading}
+        />
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">

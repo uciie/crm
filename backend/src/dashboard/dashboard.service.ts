@@ -18,6 +18,11 @@ export interface KpiResult {
   urgent_tasks:        number   // FIX §4.4 — tâches priorité haute/urgente
   // Agenda
   todays_appointments: AppointmentRow[]  // FIX §4.3 — RDV du jour
+  // Valeurs de la période précédente — consommées par calculateTrend() côté frontend
+  prev_revenue:         number
+  prev_conversion_rate: number
+  prev_new_contacts:    number
+  prev_overdue_tasks:   number
 }
 
 export interface AppointmentRow {
@@ -80,6 +85,26 @@ export class DashboardService {
     return { start, end: now }
   }
 
+  /**
+   * Calcule la plage de la période précédente de durée équivalente à la plage courante.
+   * Utilisé pour alimenter les indicateurs de tendance (prev_*) retournés dans KpiResult.
+   *
+   * Exemple : si la période courante est janvier 2025 (31 jours),
+   * la période précédente sera décembre 2024 (31 jours avant le 1er janvier).
+   */
+  private resolvePreviousDateRange(
+    startDate?: string,
+    endDate?:   string,
+  ): { start: Date; end: Date } {
+    const { start, end } = this.resolveDateRange(startDate, endDate)
+    const durationMs     = end.getTime() - start.getTime()
+
+    return {
+      start: new Date(start.getTime() - durationMs),
+      end:   new Date(start.getTime()),
+    }
+  }
+
   // ── getKpis ─────────────────────────────────────────────────────────────────
 
   /**
@@ -87,6 +112,8 @@ export class DashboardService {
    *
    * Retourne tous les indicateurs clés de la page d'accueil en une seule
    * requête parallèle. Supporte désormais un filtre de période personnalisé.
+   * Retourne également les valeurs de la période précédente (prev_*) pour
+   * permettre le calcul de tendance côté frontend via `calculateTrend`.
    *
    * @param startDate  ISO date string (ex: "2025-01-01") — optionnel
    * @param endDate    ISO date string (ex: "2025-03-31") — optionnel
@@ -97,8 +124,9 @@ export class DashboardService {
     startDate?: string,
     endDate?:   string,
   ): Promise<KpiResult> {
-    const isAdmin           = role === 'admin'
-    const { start, end }    = this.resolveDateRange(startDate, endDate)
+    const isAdmin              = role === 'admin'
+    const { start, end }       = this.resolveDateRange(startDate, endDate)
+    const { start: prevStart, end: prevEnd } = this.resolvePreviousDateRange(startDate, endDate)
 
     // ── Toutes les requêtes lancées en parallèle ────────────────────────────
     const [
@@ -110,6 +138,11 @@ export class DashboardService {
       newContactsRows,
       totalContactsRows,
       appointmentsRows,
+      // Période précédente
+      prevRevenueRows,
+      prevConversionRows,
+      prevNewContactsRows,
+      prevOverdueRows,
     ] = await Promise.all([
 
       // §1.2 — CA des leads gagnés sur la période
@@ -186,9 +219,49 @@ export class DashboardService {
           AND assigned_to = ${userId}
         ORDER BY due_date ASC
       `),
+
+      // Période précédente — CA
+      db.execute(sql`
+        SELECT COALESCE(SUM(value), 0) AS revenue
+        FROM leads
+        WHERE status    = 'gagné'
+          AND updated_at >= ${prevStart}
+          AND updated_at <= ${prevEnd}
+          ${!isAdmin ? sql`AND assigned_to = ${userId}` : sql``}
+      `),
+
+      // Période précédente — Taux de conversion
+      db.execute(sql`
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'gagné') AS won,
+          COUNT(*)                                  AS total
+        FROM leads
+        WHERE created_at >= ${prevStart}
+          AND created_at <= ${prevEnd}
+          ${!isAdmin ? sql`AND assigned_to = ${userId}` : sql``}
+      `),
+
+      // Période précédente — Nouveaux contacts
+      db.execute(sql`
+        SELECT COUNT(*) AS new_contacts
+        FROM contacts
+        WHERE created_at >= ${prevStart}
+          AND created_at <= ${prevEnd}
+          ${!isAdmin ? sql`AND assigned_to = ${userId}` : sql``}
+      `),
+
+      // Période précédente — Tâches en retard (snapshot à la fin de la période précédente)
+      db.execute(sql`
+        SELECT COUNT(*) AS overdue
+        FROM tasks
+        WHERE status  NOT IN ('terminée', 'annulée')
+          AND due_date < ${prevEnd}
+          AND due_date >= ${prevStart}
+          AND assigned_to = ${userId}
+      `),
     ])
 
-    // ── Extraction et calculs ────────────────────────────────────────────────
+    // ── Extraction et calculs — période courante ─────────────────────────────
     const revRow  = (revenueRows.rows[0]    ?? {}) as Record<string, unknown>
     const convRow = (conversionRows.rows[0] ?? {}) as Record<string, unknown>
     const pipRow  = (pipelineRows.rows[0]   ?? {}) as Record<string, unknown>
@@ -200,6 +273,15 @@ export class DashboardService {
     const won   = Number(convRow.won   ?? 0)
     const total = Number(convRow.total ?? 0)
 
+    // ── Extraction et calculs — période précédente ───────────────────────────
+    const prevRevRow  = (prevRevenueRows.rows[0]     ?? {}) as Record<string, unknown>
+    const prevConvRow = (prevConversionRows.rows[0]  ?? {}) as Record<string, unknown>
+    const prevNcRow   = (prevNewContactsRows.rows[0] ?? {}) as Record<string, unknown>
+    const prevOdRow   = (prevOverdueRows.rows[0]     ?? {}) as Record<string, unknown>
+
+    const prevWon   = Number(prevConvRow.won   ?? 0)
+    const prevTotal = Number(prevConvRow.total ?? 0)
+
     return {
       revenue_this_month:  Number(revRow.revenue         ?? 0),
       conversion_rate:     total > 0 ? Math.round((won / total) * 100) : 0,
@@ -209,6 +291,11 @@ export class DashboardService {
       new_contacts:        Number(ncRow.new_contacts     ?? 0),
       total_contacts:      Number(tcRow.total_contacts   ?? 0),
       todays_appointments: (appointmentsRows.rows ?? []) as unknown as AppointmentRow[],
+      // Valeurs de la période précédente — consommées par calculateTrend() côté frontend
+      prev_revenue:         Number(prevRevRow.revenue      ?? 0),
+      prev_conversion_rate: prevTotal > 0 ? Math.round((prevWon / prevTotal) * 100) : 0,
+      prev_new_contacts:    Number(prevNcRow.new_contacts  ?? 0),
+      prev_overdue_tasks:   Number(prevOdRow.overdue       ?? 0),
     }
   }
 

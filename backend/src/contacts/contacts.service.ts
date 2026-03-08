@@ -4,6 +4,8 @@ import { contacts, companies, profiles } from '../database/schema'
 import { eq, or, ilike, and, isNull, desc, sql } from 'drizzle-orm'
 import { CreateContactDto } from './dto/create-contact.dto'
 import type { AuthUser } from '../auth/types'
+import { EmailService } from '../email/email.service'
+import { BREVO_TEMPLATES } from '../email/templates.config'
 
 export interface ContactFilters {
   search?: string
@@ -17,6 +19,8 @@ export interface ContactFilters {
 
 @Injectable()
 export class ContactsService {
+  constructor(private readonly emailService: EmailService) {}
+  
   async findAll(user: AuthUser, filters: ContactFilters = {}) {
     console.log('filters dans service:', filters)
     const { search, company_id, assigned_to, is_subscribed, city, page = 1, limit = 20 } = filters
@@ -130,17 +134,30 @@ export class ContactsService {
     return contact
   }
 
-  async create(dto: CreateContactDto, userId: string) {
+  async create(createContactDto: any, userId: string) {
     const [newContact] = await db
       .insert(contacts)
-      .values({
-        ...dto,
-        created_by:  userId,
-        assigned_to: dto.assigned_to ?? userId,
-      })
-      .returning()
+      .values({ ...createContactDto, created_by: userId })
+      .returning();
 
-    return newContact
+    if (newContact && newContact.email) {
+      try {
+        // Utilisation de la méthode transactionnelle générique avec le template WELCOME
+        await this.emailService.sendTransactional({
+          to: { email: newContact.email, name: `${newContact.first_name} ${newContact.last_name}` },
+          templateId: BREVO_TEMPLATES.WELCOME,
+          params: { 
+            FIRSTNAME: newContact.first_name,
+            LOGIN_URL: process.env.FRONTEND_URL + '/login'
+          },
+          contactId: newContact.id,
+          createdBy: userId
+        });
+      } catch (error) {
+        console.error("Échec de l'envoi de l'email de bienvenue:", error);
+      }
+    }
+    return newContact;
   }
 
   async update(id: string, dto: Partial<CreateContactDto>, user: AuthUser) {

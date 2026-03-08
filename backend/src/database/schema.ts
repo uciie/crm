@@ -206,3 +206,6 @@ export type Lead          = typeof leads.$inferSelect
 export type Task          = typeof tasks.$inferSelect
 export type Communication = typeof communications.$inferSelect
 export type PipelineDeal  = typeof pipelineDeals.$inferSelect
+export type TaskType = typeof taskTypeEnum.enumValues[number];
+export type TaskStatus = typeof taskStatusEnum.enumValues[number];
+export type TaskPriority = typeof taskPriorityEnum.enumValues[number];

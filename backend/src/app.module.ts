@@ -12,6 +12,7 @@ import { EmailModule }       from './email/email.module'
 import { DashboardModule }   from './dashboard/dashboard.module'
 import { CompaniesModule }  from './companies/companies.module'
 import { NotificationsModule } from './notifications/notifications.module'
+import { WebhooksModule } from './webhooks/webhooks.module'
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { NotificationsModule } from './notifications/notifications.module'
     EmailModule,
     DashboardModule,
     NotificationsModule,
+    WebhooksModule,
   ],
   providers: [
     {

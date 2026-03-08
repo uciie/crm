@@ -28,7 +28,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { contactsService }  from '@/services/contacts.service'
-import { companiesService } from '@/services/companies.service'
+import { useCompanyOptions } from '@/hooks/useCompanies'
 import { useToast }         from '@/hooks/useToast'
 import { cn }               from '@/lib/utils'
 import type { Contact, CompanyOption } from '@/types/crm.types'
@@ -130,8 +130,7 @@ function inputCn(hasError?: string) {
 export function ContactForm({ contact, onClose, onSaved }: ContactFormProps) {
   const { toast }                       = useToast()
   const isEdit                          = !!contact?.id
-  const [companies, setCompanies]       = useState<CompanyOption[]>([])
-  const [loadingCompanies, setLoadingCompanies] = useState(false)
+  const { options: companies = [], loading: loadingCompanies = false } = useCompanyOptions()
 
   const {
     register,
@@ -180,18 +179,7 @@ export function ContactForm({ contact, onClose, onSaved }: ContactFormProps) {
     }
   }, [contact, reset])
 
-  // Chargement dynamique des entreprises depuis l'API
-  // GET /companies?limit=500 => CompanyOption[]
-  useEffect(() => {
-    setLoadingCompanies(true)
-    companiesService
-      .listOptions()           // renvoie { id, name }[]
-      .then(setCompanies)
-      .catch(() => {
-        toast('error', 'Erreur', 'Impossible de charger la liste des entreprises.')
-      })
-      .finally(() => setLoadingCompanies(false))
-  }, [])
+  // Options d'entreprises fournies par le hook useCompanyOptions
 
   // Nettoyage payload avant envoi -- transforme '' en undefined
   const buildPayload = (data: ContactFormData) => ({
@@ -574,7 +562,7 @@ export function ContactForm({ contact, onClose, onSaved }: ContactFormProps) {
             {isSubmitting && <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />}
             {isSubmitting
               ? 'Enregistrement...'
-              : isEdit ? 'Modifier le contact' : 'Creer le contact'
+              : isEdit ? 'Enregistrer' : 'Creer'
             }
           </button>
         </div>

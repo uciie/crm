@@ -78,3 +78,6 @@ export function useCompanyOptions() {
 
   return { options, loading }
 }
+
+// Alias attendu par les tests (ContactDetail.test.tsx)
+export const useCompanyDetail = useCompany

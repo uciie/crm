@@ -423,6 +423,10 @@ export interface DashboardKpis {
   conversion_rate:    number
   overdue_tasks:      number
   new_contacts:       number
+  prev_revenue:         number
+  prev_conversion_rate: number
+  prev_overdue_tasks:   number
+  prev_new_contacts:    number
 }
 
 // ── Système de notifications Toast ───────────────────────────
