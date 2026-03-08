@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit, InternalServerErrorException } from '@nestjs/common'
+import { Injectable, Logger, OnModuleInit, InternalServerErrorException, NotFoundException } from '@nestjs/common'
 import { db } from '../database/db.config'
 import { emailCampaigns, communications, contacts, profiles } from '../database/schema'
 import { eq } from 'drizzle-orm'
@@ -383,6 +383,8 @@ export class EmailService implements OnModuleInit {
     sentCount:  number
     openRate:   number
     clickRate:  number
+    unsubscribeCount: number
+    bounceCount:      number
   } | null> {
     try {
       const stats = await this.brevoRequest(`/emailCampaigns/${brevoCampaignId}`, 'GET')
@@ -392,11 +394,15 @@ export class EmailService implements OnModuleInit {
       const sent   = Number(s.sent ?? s.delivered ?? 0)
       const opens  = Number(s.uniqueOpens  ?? 0)
       const clicks = Number(s.uniqueClicks ?? 0)
+      const unsubscribes = Number(s.unsubscriptions ?? s.unsubscribes ?? 0)
+      const bounces      = Number(s.hardBounces ?? 0) + Number(s.softBounces ?? 0)
 
       return {
         sentCount:  sent,
         openRate:   sent > 0 ? Math.round((opens  / sent) * 10000) / 100 : 0,
         clickRate:  sent > 0 ? Math.round((clicks / sent) * 10000) / 100 : 0,
+        unsubscribeCount: unsubscribes,
+        bounceCount:      bounces,
       }
     } catch (err: any) {
       this.logger.error(`getCampaignStats(${brevoCampaignId}): ${err?.message}`)
@@ -477,5 +483,54 @@ export class EmailService implements OnModuleInit {
     } catch (err: any) {
       this.logger.error(`logCommunication error: ${err?.message}`)
     }
+  }
+
+  // Calcul et persistance du ROI 
+  async calculateAndSaveRoi(campaignId: string): Promise<{
+    cost: number
+    revenue: number
+    roi: number | null
+  }> {
+    const [campaign] = await db
+      .select()
+      .from(emailCampaigns)
+      .where(eq(emailCampaigns.id, campaignId))
+      .limit(1)
+
+    if (!campaign) throw new NotFoundException('Campagne introuvable')
+
+    const cost    = Number(campaign.cost    ?? 0)
+    const revenue = Number(campaign.revenue_generated ?? 0)
+
+    // ROI = (Gain net / Coût) × 100
+    // Exemple : coût 500€, revenus 2000€ → ROI = (1500/500)*100 = 300%
+    const roi = cost > 0 ? ((revenue - cost) / cost) * 100 : null
+
+    await db
+      .update(emailCampaigns)
+      .set({ roi: roi !== null ? String(roi.toFixed(2)) : null })
+      .where(eq(emailCampaigns.id, campaignId))
+
+    return { cost, revenue, roi }
+  }
+
+  // Mise à jour des données financières + recalcul ROI
+  async updateFinancials(campaignId: string, data: {
+    cost?:              number
+    revenue_generated?: number
+    conversion_count?:  number
+  }): Promise<void> {
+    await db
+      .update(emailCampaigns)
+      .set({
+        ...(data.cost              !== undefined && { cost: String(data.cost) }),
+        ...(data.revenue_generated !== undefined && { revenue_generated: String(data.revenue_generated) }),
+        ...(data.conversion_count  !== undefined && { conversion_count: data.conversion_count }),
+        updated_at: new Date(),
+      })
+      .where(eq(emailCampaigns.id, campaignId))
+
+    // Recalcule immédiatement après la mise à jour
+    await this.calculateAndSaveRoi(campaignId)
   }
 }

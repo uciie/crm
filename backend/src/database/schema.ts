@@ -174,6 +174,27 @@ export const emailCampaigns = pgTable('email_campaigns', {
   created_by:         uuid('created_by').references(() => profiles.id),
   created_at:         timestamp('created_at', { withTimezone: true }).defaultNow(),
   updated_at:         timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  // ── Données financières (saisie manuelle) ──
+  cost: decimal('cost', { precision: 10, scale: 2 }).default('0'),
+  // Coût total de la campagne (achat liste, création contenu, frais Brevo)
+
+  revenue_generated: decimal('revenue_generated', { precision: 15, scale: 2 }).default('0'),
+  // CA généré et attribué manuellement à cette campagne
+
+  // ── Métriques complémentaires depuis Brevo ──
+  unsubscribe_count: integer('unsubscribe_count').default(0),
+  // Désabonnements — coût indirect (perte de base)
+
+  bounce_count: integer('bounce_count').default(0),
+  // Hard bounces — indicateur de qualité de liste
+
+  conversion_count: integer('conversion_count').default(0),
+  // Nombre de conversions trackées (si tu implémentes un pixel/UTM)
+
+  // ── ROI calculé et mis en cache ──
+  roi: decimal('roi', { precision: 8, scale: 2 }),
+  // Stocké après calcul : (revenue - cost) / cost * 100
+  // null = pas encore calculé
 })
 
 // Types inférés pour TypeScript

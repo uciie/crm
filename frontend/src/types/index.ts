@@ -328,6 +328,12 @@ export interface EmailCampaign {
   sent_at?:            string
   created_at:          string
   updated_at:          string
+  cost?:              number
+  revenue_generated?: number
+  unsubscribe_count?: number
+  bounce_count?:      number
+  conversion_count?:  number
+  roi?:               number | null  // null = coût non renseigné
 }
 
 // ── Pagination et filtres ─────────────────────────────────────

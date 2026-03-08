@@ -160,6 +160,8 @@ export class CommunicationsService {
           sent_count: stats.sentCount,
           open_rate:  String(stats.openRate),
           click_rate: String(stats.clickRate),
+          unsubscribe_count: stats.unsubscribeCount,
+          bounce_count: stats.bounceCount, 
           updated_at: new Date(),
         })
         .where(eq(emailCampaigns.id, campaign.id))
