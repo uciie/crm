@@ -1,13 +1,15 @@
 import {
   IsString, IsOptional, IsEnum, IsUUID,
-  IsDate, MaxLength, IsNotEmpty, MinDate
+  IsDate, MaxLength, IsNotEmpty, MinDate,
 } from 'class-validator'
+import { Transform } from 'class-transformer'
 import { Type } from 'class-transformer'
 
 export type TaskStatus   = 'à_faire' | 'en_cours' | 'terminée' | 'annulée'
 export type TaskPriority = 'basse' | 'moyenne' | 'haute' | 'urgente'
 // Permet de distinguer les activités calendaires dans la vue agenda.
 export type TaskType = 'tache' | 'rappel' | 'rendez-vous' | 'appel'
+const toNullIfEmpty = ({ value }) => (value === '' ? null : value)
 
 export class CreateTaskDto {
   @IsString()
@@ -45,15 +47,18 @@ export class CreateTaskDto {
 
   @IsOptional()
   @IsUUID()
-  contact_id?: string
+  @Transform(toNullIfEmpty)
+  contact_id?: string | null
 
   @IsOptional()
   @IsUUID()
-  lead_id?: string
+  @Transform(toNullIfEmpty)
+  company_id?: string | null
 
   @IsOptional()
   @IsUUID()
-  company_id?: string
+  @Transform(toNullIfEmpty)
+  lead_id?: string | null
 
   @IsOptional()
   @IsUUID()

@@ -76,6 +76,10 @@ export class TasksService {
         due_date:     tasks.due_date,
         completed_at: tasks.completed_at,
         created_at:   tasks.created_at,
+        contact_id:   tasks.contact_id,
+        lead_id:      tasks.lead_id,
+        company_id:   tasks.company_id,
+        assigned_to:  tasks.assigned_to,
         contact: {
           id:         contacts.id,
           first_name: contacts.first_name,
@@ -121,16 +125,47 @@ export class TasksService {
 
   async findOne(id: string, user: AuthUser) {
     const [task] = await db
-      .select()
+      .select({
+        id:           tasks.id,
+        title:        tasks.title,
+        description:  tasks.description,
+        status:       tasks.status,
+        priority:     tasks.priority,
+        type:         tasks.type,
+        due_date:     tasks.due_date,
+        completed_at: tasks.completed_at,
+        created_at:   tasks.created_at,
+        contact_id:   tasks.contact_id,
+        lead_id:      tasks.lead_id,
+        company_id:   tasks.company_id,
+        assigned_to:  tasks.assigned_to,
+        contact: {
+          id:         contacts.id,
+          first_name: contacts.first_name,
+          last_name:  contacts.last_name,
+          email:      contacts.email,
+        },
+        lead: {
+          id:    leads.id,
+          title: leads.title,
+          value: leads.value,
+        },
+        assignee: {
+          id:         profiles.id,
+          full_name:  profiles.full_name,
+          avatar_url: profiles.avatar_url,
+        },
+      })
       .from(tasks)
       .leftJoin(contacts, eq(tasks.contact_id, contacts.id))
-      .leftJoin(leads,    eq(tasks.lead_id, leads.id))
+      .leftJoin(leads,    eq(tasks.lead_id,    leads.id))
+      .leftJoin(profiles, eq(tasks.assigned_to, profiles.id))
       .where(eq(tasks.id, id))
       .limit(1)
 
     if (!task) throw new NotFoundException('Tâche introuvable')
 
-    if (user.role !== 'admin' && task.tasks.assigned_to !== user.id) {
+    if (user.role !== 'admin' && task.assigned_to !== user.id) {
       throw new ForbiddenException('Accès refusé')
     }
 

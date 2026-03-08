@@ -1,7 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// components/tasks/TaskForm.tsx — Formulaire création / édition
-// Utilise : Modal, Button, Spinner du projet
-// Validation : React Hook Form + Zod
+// components/tasks/TaskForm.tsx — Formulaire création / édition / consultation
 // ─────────────────────────────────────────────────────────────────────────────
 
 'use client'
@@ -12,12 +10,12 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
   Bell, CalendarDays, Phone, CheckSquare,
-  Clock, User, TrendingUp, AlertCircle,
+  Clock, User, TrendingUp, AlertCircle, Pencil,
 } from 'lucide-react'
 import { Modal }   from '@/components/ui/Modal'
 import { Button }  from '@/components/ui/Button'
 import { TaskType, TaskStatus, TaskPriority } from '@/types/index'
-import type { Task, TaskFormValues } from '@/types/index'
+import type { Task } from '@/types/index'
 import { useFormOptions } from '@/hooks/useTasks'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -30,21 +28,17 @@ const taskSchema = z.object({
   type:        z.nativeEnum(TaskType),
   status:      z.nativeEnum(TaskStatus),
   priority:    z.nativeEnum(TaskPriority),
-  due_date: z.string().optional().refine(
-    v => !v || new Date(v) > new Date(),
-    { message: "La date ne peut pas être dans le passé" }
-  ),
-  contact_id: z.string().uuid().optional().or(z.literal('')),
-  lead_id:    z.string().uuid().optional().or(z.literal('')),
+  due_date:    z.string().optional(),
+  contact_id:  z.string().uuid().optional().or(z.literal('')),
+  lead_id:     z.string().uuid().optional().or(z.literal('')),
 })
-
 type Schema = z.infer<typeof taskSchema>
+export type TaskFormValues = z.infer<typeof taskSchema>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers UI
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Input sombre, cohérent avec le design system slate-950 */
 const INPUT = [
   'w-full px-3 py-2 text-sm text-slate-200 bg-slate-900 border border-slate-700',
   'placeholder:text-slate-600',
@@ -53,7 +47,13 @@ const INPUT = [
   'transition-colors duration-150',
 ].join(' ')
 
-const SELECT = INPUT + ' cursor-pointer'
+const INPUT_READONLY = [
+  'w-full px-3 py-2 text-sm text-slate-300 bg-slate-950 border border-slate-800',
+  'cursor-default select-text',
+].join(' ')
+
+const SELECT      = INPUT + ' cursor-pointer'
+const SELECT_READONLY = INPUT_READONLY
 
 function Field({
   label, error, required, children,
@@ -78,31 +78,38 @@ function Field({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sélecteur de type visuel (4 boutons)
+// Sélecteur de type visuel
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TYPE_OPTIONS = [
-  { value: TaskType.Rappel,     label: 'Rappel',      Icon: Bell,         activeColor: 'border-amber-500 bg-amber-950/40 text-amber-400'  },
-  { value: TaskType.RendezVous, label: 'Rendez-vous', Icon: CalendarDays, activeColor: 'border-blue-500  bg-blue-950/40  text-blue-400'   },
+  { value: TaskType.Rappel,     label: 'Rappel',      Icon: Bell,         activeColor: 'border-amber-500 bg-amber-950/40 text-amber-400'      },
+  { value: TaskType.RendezVous, label: 'Rendez-vous', Icon: CalendarDays, activeColor: 'border-blue-500  bg-blue-950/40  text-blue-400'        },
   { value: TaskType.Appel,      label: 'Appel',       Icon: Phone,        activeColor: 'border-emerald-500 bg-emerald-950/40 text-emerald-400' },
-  { value: TaskType.Tache,      label: 'Tâche',       Icon: CheckSquare,  activeColor: 'border-slate-500 bg-slate-800/60 text-slate-300'  },
+  { value: TaskType.Tache,      label: 'Tâche',       Icon: CheckSquare,  activeColor: 'border-slate-500 bg-slate-800/60 text-slate-300'       },
 ]
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Props
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface TaskFormProps {
+  open:      boolean
+  onClose:   () => void
+  onSubmit:  (values: TaskFormValues) => Promise<void>
+  onEdit?:   () => void   // appelé quand l'utilisateur clique "Modifier" en mode lecture
+  task?:     Task
+  readOnly?: boolean      // true = mode consultation, false/absent = création ou édition
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface TaskFormProps {
-  open:     boolean
-  onClose:  () => void
-  onSubmit: (values: TaskFormValues) => Promise<void>
-  task?:    Task
-}
-
-export function TaskForm({ open, onClose, onSubmit, task }: TaskFormProps) {
-  const isEditing = Boolean(task)
+export function TaskForm({ open, onClose, onSubmit, onEdit, task, readOnly = false }: TaskFormProps) {
+  const isEditing  = Boolean(task) && !readOnly
+  const isCreating = !task
   const { contacts, leads } = useFormOptions()
-
+  console.log('task reçu dans TaskForm :', task)
   const defaults = {
     title:       task?.title       ?? '',
     description: task?.description ?? '',
@@ -110,8 +117,8 @@ export function TaskForm({ open, onClose, onSubmit, task }: TaskFormProps) {
     status:      task?.status      ?? TaskStatus.AFaire,
     priority:    task?.priority    ?? TaskPriority.Moyenne,
     due_date:    task?.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : '',
-    contact_id:  task?.contact?.id ?? '',
-    lead_id:     task?.lead?.id    ?? '',
+    contact_id:  task?.contact_id  ?? '',
+    lead_id:     task?.lead_id     ?? '',
   }
 
   const {
@@ -121,51 +128,94 @@ export function TaskForm({ open, onClose, onSubmit, task }: TaskFormProps) {
 
   useEffect(() => {
     if (open) reset(defaults)
-  }, [open, task]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, task, contacts, leads])
 
   async function handleValid(values: Schema) {
-    await onSubmit({
+    const payload: Record<string, unknown> = {
       ...values,
-      due_date:   values.due_date   || undefined,
-      contact_id: values.contact_id || undefined,
-      lead_id:    values.lead_id    || undefined,
-    } as TaskFormValues)
+      due_date: values.due_date || undefined,
+    }
+
+    // Supprimer les clés UUID vides plutôt qu'envoyer null/''
+    // Le backend ne touche pas aux champs absents d'un PATCH
+    if (!values.contact_id) delete payload.contact_id
+    if (!values.lead_id)    delete payload.lead_id
+    console.log('PAYLOAD ENVOYÉ :', JSON.stringify(payload, null, 2))
+    await onSubmit(payload as TaskFormValues)
     onClose()
   }
+  // Ajouter temporairement dans TaskForm pour debugger
+console.log('contact_id en base :', task?.contact_id)
+console.log('options disponibles :', contacts.map(c => c.id))
+console.log('trouvé ?', contacts.some(c => c.id === task?.contact_id))
+
+  // Titre et sous-titre dynamiques selon le mode
+  const modalTitle = readOnly
+    ? 'Détail de la tâche'
+    : isEditing
+      ? 'Modifier la tâche'
+      : 'Nouvelle tâche'
+
+  const modalSubtitle = readOnly
+    ? `Consultation · ${task?.id.slice(0, 8)}…`
+    : isEditing
+      ? `Édition · ${task?.id.slice(0, 8)}…`
+      : 'Planifier une activité'
 
   if (!open) return null
 
   return (
     <Modal
-      title={isEditing ? 'Modifier la tâche' : 'Nouvelle tâche'}
-      subtitle={isEditing ? `Édition · ${task?.id.slice(0, 8)}…` : 'Planifier une activité'}
+      title={modalTitle}
+      subtitle={modalSubtitle}
       onClose={onClose}
       size="lg"
       footer={
-        <>
-          <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>
-            Annuler
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            loading={isSubmitting}
-            onClick={handleSubmit(handleValid)}
-          >
-            {isEditing ? 'Enregistrer' : 'Créer la tâche'}
-          </Button>
-        </>
+        readOnly ? (
+          // ── Mode lecture : Fermer + bouton Modifier ───────────────────────
+          <>
+            <Button variant="ghost" size="sm" onClick={onClose}>
+              Fermer
+            </Button>
+            {onEdit && (
+              <Button
+                variant="primary"
+                size="sm"
+                icon={<Pencil size={13} />}
+                onClick={onEdit}
+              >
+                Modifier
+              </Button>
+            )}
+          </>
+        ) : (
+          // ── Mode création / édition ───────────────────────────────────────
+          <>
+            <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={isSubmitting}
+              onClick={handleSubmit(handleValid)}
+            >
+              {isCreating ? 'Créer la tâche' : 'Enregistrer'}
+            </Button>
+          </>
+        )
       }
     >
       <form onSubmit={handleSubmit(handleValid)} noValidate className="px-6 py-5 space-y-6">
 
         {/* Titre */}
-        <Field label="Titre" required error={errors.title?.message}>
+        <Field label="Titre" required={!readOnly} error={errors.title?.message}>
           <input
             {...register('title')}
-            placeholder="Ex : Rappeler M. Dupont avant signature"
-            autoFocus
-            className={INPUT}
+            readOnly={readOnly}
+            placeholder={readOnly ? '' : 'Ex : Rappeler M. Dupont avant signature'}
+            autoFocus={!readOnly}
+            className={readOnly ? INPUT_READONLY : INPUT}
           />
         </Field>
 
@@ -173,14 +223,15 @@ export function TaskForm({ open, onClose, onSubmit, task }: TaskFormProps) {
         <Field label="Description" error={errors.description?.message}>
           <textarea
             {...register('description')}
+            readOnly={readOnly}
             rows={3}
-            placeholder="Contexte ou instructions supplémentaires…"
-            className={`${INPUT} resize-none`}
+            placeholder={readOnly ? '' : 'Contexte ou instructions supplémentaires…'}
+            className={`${readOnly ? INPUT_READONLY : INPUT} resize-none`}
           />
         </Field>
 
         {/* Type — sélecteur visuel */}
-        <Field label="Type d'activité" required error={errors.type?.message}>
+        <Field label="Type d'activité" required={!readOnly} error={errors.type?.message}>
           <Controller
             control={control}
             name="type"
@@ -194,15 +245,21 @@ export function TaskForm({ open, onClose, onSubmit, task }: TaskFormProps) {
                       type="button"
                       role="radio"
                       aria-checked={active}
-                      onClick={() => field.onChange(value)}
+                      // En mode lecture : désactiver les clics sur les types non actifs
+                      onClick={() => { if (!readOnly) field.onChange(value) }}
                       className={[
                         'flex flex-col items-center gap-2 py-4 px-2',
                         'text-[10px] font-bold tracking-[0.12em] uppercase border',
                         'transition-all duration-150',
                         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
-                        active
-                          ? activeColor
-                          : 'border-slate-800 bg-slate-900 text-slate-500 hover:border-slate-700 hover:text-slate-400',
+                        readOnly
+                          ? active
+                            ? activeColor
+                            : 'border-slate-800 bg-slate-950 text-slate-600 opacity-40'
+                          : active
+                            ? activeColor
+                            : 'border-slate-800 bg-slate-900 text-slate-500 hover:border-slate-700 hover:text-slate-400',
+                        readOnly ? 'cursor-default' : 'cursor-pointer',
                       ].join(' ')}
                     >
                       <Icon size={18} />
@@ -217,16 +274,24 @@ export function TaskForm({ open, onClose, onSubmit, task }: TaskFormProps) {
 
         {/* Priorité + Statut */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Priorité" required error={errors.priority?.message}>
-            <select {...register('priority')} className={SELECT}>
+          <Field label="Priorité" required={!readOnly} error={errors.priority?.message}>
+            <select
+              {...register('priority')}
+              disabled={readOnly}
+              className={readOnly ? SELECT_READONLY : SELECT}
+            >
               <option value={TaskPriority.Basse}>Basse</option>
               <option value={TaskPriority.Moyenne}>Moyenne</option>
               <option value={TaskPriority.Haute}>Haute</option>
               <option value={TaskPriority.Urgente}>Urgente</option>
             </select>
           </Field>
-          <Field label="Statut" required error={errors.status?.message}>
-            <select {...register('status')} className={SELECT}>
+          <Field label="Statut" required={!readOnly} error={errors.status?.message}>
+            <select
+              {...register('status')}
+              disabled={readOnly}
+              className={readOnly ? SELECT_READONLY : SELECT}
+            >
               <option value={TaskStatus.AFaire}>À faire</option>
               <option value={TaskStatus.EnCours}>En cours</option>
               <option value={TaskStatus.Terminee}>Terminée</option>
@@ -242,8 +307,8 @@ export function TaskForm({ open, onClose, onSubmit, task }: TaskFormProps) {
             <input
               {...register('due_date')}
               type="datetime-local"
-              min={new Date().toISOString().slice(0, 16)}
-              className={`${INPUT} pl-9`}
+              readOnly={readOnly}
+              className={`${readOnly ? INPUT_READONLY : INPUT} pl-9`}
               style={{ colorScheme: 'dark' }}
             />
           </div>
@@ -251,19 +316,29 @@ export function TaskForm({ open, onClose, onSubmit, task }: TaskFormProps) {
 
         {/* Contact / Lead */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Lier à un contact" error={errors.contact_id?.message}>
+          <Field label="Contact lié" error={errors.contact_id?.message}>
             <div className="relative">
               <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" />
-              <select {...register('contact_id')} className={`${SELECT} pl-9`}>
+              <select
+                {...register('contact_id')}
+                disabled={readOnly}
+                className={`${readOnly ? SELECT_READONLY : SELECT} pl-9`}
+              >
+                console.log('shape options contact :', contacts[0])
                 <option value="">Aucun contact</option>
                 {contacts.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
               </select>
             </div>
           </Field>
-          <Field label="Lier à un lead" error={errors.lead_id?.message}>
+          <Field label="Lead lié" error={errors.lead_id?.message}>
             <div className="relative">
               <TrendingUp size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 pointer-events-none" />
-              <select {...register('lead_id')} className={`${SELECT} pl-9`}>
+              <select
+                {...register('lead_id')}
+                disabled={readOnly}
+                className={`${readOnly ? SELECT_READONLY : SELECT} pl-9`}
+              >
+                console.log('shape options leads :', leads[0])
                 <option value="">Aucun lead</option>
                 {leads.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
               </select>

@@ -49,6 +49,7 @@ export class TasksController {
     @Body() dto: UpdateTaskDto,
     @Request() req: any
   ) {
+    console.log('DTO reçu par le backend :', dto)
     return this.tasksService.update(id, dto, req.user)
   }
 

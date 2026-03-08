@@ -18,7 +18,8 @@ import { TaskForm }         from '@/components/tasks/TaskForm'
 import { useTasks }         from '@/hooks/useTasks'
 import { isOverdue, isDueToday } from '@/lib/task-config'
 import { TaskStatus }       from '@/types/index'
-import type { Task, TaskFormValues } from '@/types/index'
+import type { Task } from '@/types/index'
+import type { TaskFormValues } from '@/components/tasks/TaskForm'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Stat Card
@@ -89,10 +90,17 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
 // Page principale
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Mode du formulaire :
+//   'closed'  — modal fermée
+//   'create'  — nouvelle tâche (pas de task sélectionnée)
+//   'view'    — consultation en lecture seule
+//   'edit'    — édition d'une tâche existante
+type FormMode = 'closed' | 'create' | 'view' | 'edit'
+
 export default function TasksPage() {
   const [tab,      setTab]      = useState<Tab>('list')
-  const [formOpen, setFormOpen] = useState(false)
-  const [editTask, setEditTask] = useState<Task | undefined>()
+  const [mode,     setMode]     = useState<FormMode>('closed')
+  const [selected, setSelected] = useState<Task | undefined>()
 
   const { tasks, loading, create, update, remove, toggle } = useTasks()
 
@@ -111,20 +119,40 @@ export default function TasksPage() {
       : 'Tâches & Agenda'
   }, [stats])
 
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  // Bouton "Nouvelle tâche"
   const handleCreate = useCallback(() => {
-    setEditTask(undefined)
-    setFormOpen(true)
+    setSelected(undefined)
+    setMode('create')
   }, [])
 
+  // Clic sur une ligne / carte → consultation
+  const handleOpen = useCallback((task: Task) => {
+    setSelected(task)
+    setMode('view')
+  }, [])
+
+  // Bouton "Modifier" dans la barre d'actions de la liste
   const handleEdit = useCallback((task: Task) => {
-    setEditTask(task)
-    setFormOpen(true)
+    setSelected(task)
+    setMode('edit')
+  }, [])
+
+  // Bouton "Modifier" à l'intérieur du modal en mode lecture
+  const handleSwitchToEdit = useCallback(() => {
+    setMode('edit')
+  }, [])
+
+  const handleClose = useCallback(() => {
+    setMode('closed')
+    setSelected(undefined)
   }, [])
 
   const handleFormSubmit = useCallback(async (values: TaskFormValues) => {
-    if (editTask) await update(editTask.id, values)
+    if (selected) await update(selected.id, values)
     else          await create(values)
-  }, [editTask, create, update])
+  }, [selected, create, update])
 
   const handleDelete = useCallback(async (id: string) => {
     if (window.confirm('Supprimer cette tâche définitivement ?')) {
@@ -135,8 +163,7 @@ export default function TasksPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-300">
 
-      {/* ── Header local — titre + bouton créer uniquement ─────────────────── */}
-      {/* Refresh et Notifications sont dans le Header global (layout) */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 bg-slate-950 border-b border-slate-800">
         <div className="max-w-screen-xl mx-auto flex items-center justify-between px-6 h-14 gap-4">
           <div className="flex items-center gap-3">
@@ -203,15 +230,15 @@ export default function TasksPage() {
                 tasks={tasks}
                 loading={loading}
                 onToggle={toggle}
-                onOpen={handleEdit}
-                onEdit={handleEdit}
+                onOpen={handleOpen}       // ← clic ligne  → mode 'view'
+                onEdit={handleEdit}       // ← clic stylo  → mode 'edit'
                 onDelete={handleDelete}
               />
             ) : (
               <CalendarView
                 tasks={tasks}
                 loading={loading}
-                onTaskClick={handleEdit}
+                onTaskClick={handleOpen}  // ← clic carte  → mode 'view'
               />
             )}
           </div>
@@ -219,10 +246,12 @@ export default function TasksPage() {
       </main>
 
       <TaskForm
-        open={formOpen}
-        onClose={() => { setFormOpen(false); setEditTask(undefined) }}
+        open={mode !== 'closed'}
+        readOnly={mode === 'view'}
+        task={selected}
+        onClose={handleClose}
         onSubmit={handleFormSubmit}
-        task={editTask}
+        onEdit={handleSwitchToEdit}   // bouton "Modifier" dans la vue lecture
       />
 
       <ToastContainer />

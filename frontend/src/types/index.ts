@@ -270,8 +270,8 @@ export interface TaskFormValues {
   status:       TaskStatus
   priority:     TaskPriority
   due_date?:    string
-  contact_id?:  string
-  lead_id?:     string
+  contact_id?: string | null
+  lead_id?:    string | null
 }
 
 export enum NotificationType {
