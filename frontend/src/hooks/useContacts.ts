@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, use } from 'react'
+import { useParams } from 'next/navigation'
 import { api }                              from '@/lib/api'
 import type { Contact, PaginatedResponse }  from '@/types'
 
@@ -50,4 +51,28 @@ export function useContacts(initialFilters: ContactFilters = {}) {
   return { contacts, pagination, loading, error, filters, setFilters, refetch, remove }
 }
 
-export const useContactDetail = useContacts
+export function useContactDetail() {
+  const params                        = useParams()
+  const id                            = params?.id as string | undefined
+
+  const [contact, setContact]         = useState<Contact | null>(null)
+  const [loading, setLoading]         = useState(true)
+  const [error,   setError]           = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!id) {
+      setLoading(false)
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    api.get(`/contacts/${id}`)
+      .then((data: Contact) => setContact(data))
+      .catch((err: any) => setError(err?.message ?? 'Erreur inconnue'))
+      .finally(() => setLoading(false))
+  }, [id])
+
+  return { contact, loading, error }
+}

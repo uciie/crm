@@ -1,32 +1,43 @@
+// ============================================================
+// contacts/contacts.service.ts
+// ============================================================
+
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common'
-import { db } from '../database/db.config'
+import { db }                    from '../database/db.config'
 import { contacts, companies, profiles } from '../database/schema'
 import { eq, or, ilike, and, isNull, desc, sql } from 'drizzle-orm'
-import { CreateContactDto } from './dto/create-contact.dto'
-import type { AuthUser } from '../auth/types'
-import { EmailService } from '../email/email.service'
-import { BREVO_TEMPLATES } from '../email/templates.config'
+import { CreateContactDto }      from './dto/create-contact.dto'
+import type { AuthUser }         from '../auth/types'
+import { EmailService }          from '../email/email.service'
 
 export interface ContactFilters {
-  search?: string
-  company_id?: string
-  assigned_to?: string
+  search?:        string
+  company_id?:    string
+  assigned_to?:   string
   is_subscribed?: boolean
-  city?: string
-  page?: number
-  limit?: number
+  city?:          string
+  page?:          number
+  limit?:         number
 }
 
 @Injectable()
 export class ContactsService {
   constructor(private readonly emailService: EmailService) {}
-  
-  async findAll(user: AuthUser, filters: ContactFilters = {}) {
-    console.log('filters dans service:', filters)
-    const { search, company_id, assigned_to, is_subscribed, city, page = 1, limit = 20 } = filters
-    const offset = (page - 1) * limit
 
-    // Construction des conditions de filtrage
+  // ── LIST (GET /contacts) ───────────────────────────────────
+
+  async findAll(user: AuthUser, filters: ContactFilters = {}) {
+    const {
+      search,
+      company_id,
+      assigned_to,
+      is_subscribed,
+      city,
+      page  = 1,
+      limit = 20,
+    } = filters
+
+    const offset = (page - 1) * limit
     const conditions: any[] = []
 
     // RLS : Les commerciaux voient leurs contacts + les non assignés
@@ -34,34 +45,32 @@ export class ContactsService {
       conditions.push(
         or(
           eq(contacts.assigned_to, user.id),
-          isNull(contacts.assigned_to)
+          isNull(contacts.assigned_to),
         )
       )
     }
 
-    // Filtre de recherche textuelle
     if (search) {
       conditions.push(
         or(
           ilike(contacts.first_name, `%${search}%`),
-          ilike(contacts.last_name, `%${search}%`),
-          ilike(contacts.email, `%${search}%`),
-          ilike(contacts.job_title, `%${search}%`)
+          ilike(contacts.last_name,  `%${search}%`),
+          ilike(contacts.email,      `%${search}%`),
+          ilike(contacts.job_title,  `%${search}%`),
         )
       )
     }
 
-    if (company_id)    conditions.push(eq(contacts.company_id, company_id))
-    if (assigned_to)   conditions.push(eq(contacts.assigned_to, assigned_to))
-    if (city)          conditions.push(ilike(contacts.city, `%${city}%`))
-      console.log('is_subscribed dans service:', is_subscribed)
+    if (company_id)  conditions.push(eq(contacts.company_id,  company_id))
+    if (assigned_to) conditions.push(eq(contacts.assigned_to, assigned_to))
+    if (city)        conditions.push(ilike(contacts.city, `%${city}%`))
+
     if (is_subscribed !== undefined && is_subscribed !== null) {
       conditions.push(eq(contacts.is_subscribed, is_subscribed === true))
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined
 
-    // Requête principale avec jointures
     const rows = await db
       .select({
         id:            contacts.id,
@@ -81,25 +90,24 @@ export class ContactsService {
         created_at:    contacts.created_at,
         updated_at:    contacts.updated_at,
         company: {
-          id:   companies.id,
-          name: companies.name,
+          id:       companies.id,
+          name:     companies.name,
           logo_url: companies.logo_url,
         },
         assigned_to: {
-          id:        profiles.id,
-          full_name: profiles.full_name,
+          id:         profiles.id,
+          full_name:  profiles.full_name,
           avatar_url: profiles.avatar_url,
         },
       })
       .from(contacts)
       .leftJoin(companies, eq(contacts.company_id, companies.id))
-      .leftJoin(profiles, eq(contacts.assigned_to, profiles.id))
+      .leftJoin(profiles,  eq(contacts.assigned_to, profiles.id))
       .where(whereClause)
       .orderBy(desc(contacts.updated_at))
       .limit(limit)
       .offset(offset)
 
-    // Compte total pour la pagination
     const [{ count }] = await db
       .select({ count: sql<number>`count(*)` })
       .from(contacts)
@@ -110,11 +118,13 @@ export class ContactsService {
       pagination: {
         page,
         limit,
-        total: Number(count),
+        total:      Number(count),
         totalPages: Math.ceil(Number(count) / limit),
       },
     }
   }
+
+  // ── FIND ONE (GET /contacts/:id) ───────────────────────────
 
   async findOne(id: string, user: AuthUser) {
     const [contact] = await db
@@ -126,42 +136,47 @@ export class ContactsService {
 
     if (!contact) throw new NotFoundException('Contact introuvable')
 
-    // Vérification d'accès
-    if (user.role !== 'admin' && contact.contacts.assigned_to !== user.id && contact.contacts.assigned_to !== null) {
+    if (
+      user.role !== 'admin' &&
+      contact.contacts.assigned_to !== user.id &&
+      contact.contacts.assigned_to !== null
+    ) {
       throw new ForbiddenException('Accès refusé')
     }
 
     return contact
   }
 
-  async create(createContactDto: any, userId: string) {
+  // ── CREATE (POST /contacts) ────────────────────────────────
+
+  async create(createContactDto: CreateContactDto, userId: string) {
     const [newContact] = await db
       .insert(contacts)
       .values({ ...createContactDto, created_by: userId })
-      .returning();
+      .returning()
 
-    if (newContact && newContact.email) {
-      try {
-        // Utilisation de la méthode transactionnelle générique avec le template WELCOME
-        await this.emailService.sendTransactional({
-          to: { email: newContact.email, name: `${newContact.first_name} ${newContact.last_name}` },
-          templateId: BREVO_TEMPLATES.WELCOME,
-          params: { 
-            FIRSTNAME: newContact.first_name,
-            LOGIN_URL: process.env.FRONTEND_URL + '/login'
-          },
-          contactId: newContact.id,
-          createdBy: userId
-        });
-      } catch (error) {
-        console.error("Échec de l'envoi de l'email de bienvenue:", error);
-      }
+    // Email de bienvenue via Resend — ne bloque jamais la création
+    if (newContact?.email) {
+      this.emailService
+        .sendWelcomeInvitation({
+          recipientEmail: newContact.email,
+          recipientName:  `${newContact.first_name} ${newContact.last_name}`,
+          role:           'contact',
+          loginUrl:       `${process.env.FRONTEND_URL}/login`,
+        })
+        .catch((err) =>
+          console.error("Échec de l'envoi de l'email de bienvenue:", err?.message)
+        )
     }
-    return newContact;
+
+    return newContact
   }
 
+  // ── UPDATE (PATCH /contacts/:id) ───────────────────────────
+
   async update(id: string, dto: Partial<CreateContactDto>, user: AuthUser) {
-    const existing = await this.findOne(id, user)
+    // findOne gère déjà le 404 + le contrôle d'accès
+    await this.findOne(id, user)
 
     if (user.role === 'utilisateur') {
       throw new ForbiddenException('Permission insuffisante')
@@ -176,6 +191,8 @@ export class ContactsService {
     return updated
   }
 
+  // ── DELETE (DELETE /contacts/:id) ──────────────────────────
+
   async remove(id: string) {
     const [deleted] = await db
       .delete(contacts)
@@ -186,8 +203,10 @@ export class ContactsService {
     return { message: 'Contact supprimé avec succès', id: deleted.id }
   }
 
+  // ── STATS (GET /contacts/stats) ────────────────────────────
+
   async getStats(userId: string, role: string) {
-    const isAdmin = role === 'admin'
+    const isAdmin   = role === 'admin'
     const condition = isAdmin ? undefined : eq(contacts.assigned_to, userId)
 
     const [{ total }] = await db
@@ -203,14 +222,16 @@ export class ContactsService {
     const [{ new_this_month }] = await db
       .select({ new_this_month: sql<number>`count(*)` })
       .from(contacts)
-      .where(and(
-        condition,
-        sql`created_at >= date_trunc('month', current_date)`
-      ))
+      .where(
+        and(
+          condition,
+          sql`created_at >= date_trunc('month', current_date)`,
+        )
+      )
 
     return {
-      total: Number(total),
-      subscribed: Number(subscribed),
+      total:          Number(total),
+      subscribed:     Number(subscribed),
       new_this_month: Number(new_this_month),
     }
   }

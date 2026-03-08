@@ -1,120 +1,104 @@
-import { Injectable, Logger, OnModuleInit, InternalServerErrorException, NotFoundException } from '@nestjs/common'
-import { db } from '../database/db.config'
-import { emailCampaigns, communications, contacts, profiles } from '../database/schema'
-import { eq } from 'drizzle-orm'
-import { BREVO_TEMPLATES, validateTemplates } from './templates.config'
+// ============================================================
+// email/email.service.ts  —  Resend
+// ============================================================
 
-// ── Types ──────────────────────────────────────────────────────────────────────
+import {
+  Injectable, Logger, OnModuleInit, NotFoundException,
+} from '@nestjs/common'
+import { Resend }       from 'resend'
+import { db }           from '../database/db.config'
+import { emailCampaigns, communications, profiles } from '../database/schema'
+import { eq }           from 'drizzle-orm'
+import { TEMPLATES, validateTemplates, type TemplateName, type TemplatePayload } from './templates.config'
 
-interface SendEmailOptions {
-  to: { email: string; name: string }[]
-  subject: string
-  htmlContent: string
-  senderName?: string
-  senderEmail?: string
-  replyTo?: string
-  tags?: string[]
+// ── Types ──────────────────────────────────────────────────────
+
+export interface EmailRecipient { email: string; name?: string }
+
+export interface TransactionalEmailOptions {
+  to:          EmailRecipient | EmailRecipient[]
+  template:    TemplateName
+  // params est Record<string, any> — chaque template documente ses propres clés
+  params:      Record<string, any>
+  contactId?:  string
+  leadId?:     string
+  createdBy?:  string
 }
 
-interface TransactionalEmailOptions {
-  to: { email: string; name: string } | { email: string; name: string }[]
-  templateId: number
-  params: Record<string, any>
-  contactId?: string
-  leadId?:    string
-  createdBy?: string
-  subject?:   string
-}
-
-// ── Service ────────────────────────────────────────────────────────────────────
+// ── Service ────────────────────────────────────────────────────
 
 @Injectable()
 export class EmailService implements OnModuleInit {
-  private readonly logger  = new Logger(EmailService.name)
-  private readonly apiKey  = process.env.BREVO_API_KEY!
-  private readonly baseUrl = 'https://api.brevo.com/v3'
+  private readonly logger = new Logger(EmailService.name)
+  private resend!: Resend
+
+  private get senderFrom(): string {
+    const name  = process.env.RESEND_SENDER_NAME  ?? 'CRM'
+    const email = process.env.RESEND_SENDER_EMAIL ?? ''
+    return `${name} <${email}>`
+  }
 
   onModuleInit() {
-    if (!this.apiKey) {
-      this.logger.error('BREVO_API_KEY is not set — email sending will be disabled.')
+    const apiKey = process.env.RESEND_API_KEY
+    if (!apiKey) {
+      this.logger.error('RESEND_API_KEY manquant — envoi désactivé.')
       return
     }
+    this.resend = new Resend(apiKey)
     validateTemplates()
-    this.logger.log('EmailService initialised ✔')
+    this.logger.log('EmailService (Resend) initialisé ✔')
   }
 
-  // ── HTTP helper ─────────────────────────────────────────────────────────────
+  // ── Core sender ─────────────────────────────────────────────
 
-  private async brevoRequest(endpoint: string, method: string, body?: any) {
-    const res = await fetch(`${this.baseUrl}${endpoint}`, {
-      method,
-      headers: {
-        'accept':       'application/json',
-        'content-type': 'application/json',
-        'api-key':      this.apiKey,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    })
-
-    if (!res.ok) {
-      const error = await res.json().catch(() => ({}))
-      this.logger.error(`Brevo API error ${res.status}: ${JSON.stringify(error)}`)
-      throw new InternalServerErrorException(`Erreur Brevo: ${(error as any).message ?? res.statusText}`)
-    }
-
-    // 204 No Content → nothing to parse
-    if (res.status === 204) return {}
-    return res.json()
-  }
-
-  // ── Core transactional sender ───────────────────────────────────────────────
-
-  /**
-   * Send a Brevo template email.
-   * Logs to `communications` table if contactId/leadId + createdBy are provided.
-   * Returns the Brevo messageId, or null on failure.
-   */
   async sendTransactional(options: TransactionalEmailOptions): Promise<string | null> {
-    if (!this.apiKey) {
-      this.logger.warn('EmailService not initialised — skipping send.')
+    if (!this.resend) {
+      this.logger.warn('Resend non initialisé — envoi ignoré.')
       return null
     }
 
-    if (options.templateId === 0) {
-      this.logger.warn(`templateId=0 — likely a missing env var. Skipping send.`)
+    const renderer = TEMPLATES[options.template]
+    if (!renderer) {
+      this.logger.error(`Template inconnu : ${options.template}`)
       return null
     }
 
+    // renderer est désormais (params: any) => TemplatePayload — aucune erreur TS
+    const { subject, html }: TemplatePayload = renderer(options.params)
     const toArray = Array.isArray(options.to) ? options.to : [options.to]
 
-    let result: any
+    let messageId: string | null = null
+
     try {
-      result = await this.brevoRequest('/smtp/email', 'POST', {
-        to:         toArray,
-        templateId: options.templateId,
-        params:     options.params,
+      const { data, error } = await this.resend.emails.send({
+        from:    this.senderFrom,
+        to:      toArray.map(r => r.name ? `${r.name} <${r.email}>` : r.email),
+        subject,
+        html,
+        replyTo: process.env.RESEND_REPLY_TO,
       })
-    } catch (err: any) {
-      this.logger.error(
-        `Failed to send email — templateId=${options.templateId}: ${err?.message}`
+
+      if (error) {
+        this.logger.error(`Resend error: ${JSON.stringify(error)}`)
+        return null
+      }
+
+      messageId = data?.id ?? null
+      this.logger.debug(
+        `Email envoyé — template=${options.template} id=${messageId}`
       )
+    } catch (err: any) {
+      this.logger.error(`sendTransactional failed: ${err?.message}`)
       return null
     }
 
-    const messageId: string = result?.messageId ?? ''
-
-    this.logger.debug(
-      `Email sent — templateId=${options.templateId} to=${toArray.map(r => r.email).join(',')} messageId=${messageId}`
-    )
-
-    // Persist to communications if caller provided the context
-    if (options.createdBy && (options.contactId || options.leadId)) {
+    if (options.createdBy && (options.contactId || options.leadId) && messageId) {
       await this.logCommunication({
-        templateId: options.templateId,
-        subject:    options.subject ?? options.params?.subject ?? `Template #${options.templateId}`,
-        contactId:  options.contactId,
-        leadId:     options.leadId,
-        createdBy:  options.createdBy,
+        template:  options.template,
+        subject,
+        contactId: options.contactId,
+        leadId:    options.leadId,
+        createdBy: options.createdBy,
         messageId,
       })
     }
@@ -122,25 +106,8 @@ export class EmailService implements OnModuleInit {
     return messageId
   }
 
-  // ── Custom HTML email (free-form, no template) ──────────────────────────────
+  // ── Domain triggers ─────────────────────────────────────────
 
-  async sendEmail(options: SendEmailOptions) {
-    return this.brevoRequest('/smtp/email', 'POST', {
-      sender: {
-        name:  options.senderName  ?? process.env.BREVO_SENDER_NAME  ?? 'CRM',
-        email: options.senderEmail ?? process.env.BREVO_SENDER_EMAIL,
-      },
-      to:          options.to,
-      subject:     options.subject,
-      htmlContent: options.htmlContent,
-      replyTo:     options.replyTo ? { email: options.replyTo } : undefined,
-      tags:        options.tags,
-    })
-  }
-
-  // ── Domain triggers ─────────────────────────────────────────────────────────
-
-  /** Notify assignee when a new lead is created and assigned to them. */
   async sendLeadAssigned(payload: {
     assigneeId:   string
     leadId:       string
@@ -153,22 +120,20 @@ export class EmailService implements OnModuleInit {
     if (!assignee) return
 
     await this.sendTransactional({
-      to:         { email: assignee.email, name: assignee.name },
-      templateId: BREVO_TEMPLATES.LEAD_ASSIGNED,
+      to:       assignee,
+      template: 'LEAD_ASSIGNED',
       params: {
-        ASSIGNEE_NAME: assignee.name,
-        LEAD_TITLE:    payload.leadTitle,
-        CONTACT_NAME:  payload.contactName ?? '—',
-        LEAD_VALUE:    payload.leadValue ? `${payload.leadValue} €` : '—',
-        CRM_URL:       `${process.env.FRONTEND_URL}/leads/${payload.leadId}`,
+        assignee_name: assignee.name,
+        lead_title:    payload.leadTitle,
+        contact_name:  payload.contactName ?? '—',
+        lead_value:    payload.leadValue ? `${payload.leadValue} €` : '—',
+        crm_url:       `${process.env.FRONTEND_URL}/leads/${payload.leadId}`,
       },
       leadId:    payload.leadId,
       createdBy: payload.createdById,
-      subject:   `Nouveau lead assigné : ${payload.leadTitle}`,
     })
   }
 
-  /** Notify assignee when their deal moves to a significant pipeline stage. */
   async sendDealStageChanged(payload: {
     assigneeId:  string
     leadId:      string
@@ -183,29 +148,26 @@ export class EmailService implements OnModuleInit {
     const notifyStages = ['qualifié', 'proposition', 'négociation', 'gagné', 'perdu']
     if (!notifyStages.includes(payload.newStage)) return
 
-    const templateId = payload.newStage === 'gagné'
-      ? BREVO_TEMPLATES.LEAD_WON
-      : payload.newStage === 'perdu'
-        ? BREVO_TEMPLATES.LEAD_LOST
-        : BREVO_TEMPLATES.DEAL_STAGE_CHANGED
+    const template: TemplateName =
+      payload.newStage === 'gagné' ? 'LEAD_WON'
+      : payload.newStage === 'perdu' ? 'LEAD_LOST'
+      : 'DEAL_STAGE_CHANGED'
 
     await this.sendTransactional({
-      to:         { email: assignee.email, name: assignee.name },
-      templateId,
+      to:       assignee,
+      template,
       params: {
-        ASSIGNEE_NAME: assignee.name,
-        LEAD_TITLE:    payload.leadTitle,
-        OLD_STAGE:     payload.oldStage,
-        NEW_STAGE:     payload.newStage,
-        CRM_URL:       `${process.env.FRONTEND_URL}/leads/${payload.leadId}`,
+        assignee_name: assignee.name,
+        lead_title:    payload.leadTitle,
+        old_stage:     payload.oldStage,
+        new_stage:     payload.newStage,
+        crm_url:       `${process.env.FRONTEND_URL}/leads/${payload.leadId}`,
       },
       leadId:    payload.leadId,
       createdBy: payload.createdById,
-      subject:   `Pipeline : ${payload.leadTitle} → ${payload.newStage}`,
     })
   }
 
-  /** Notify assignee when a task is assigned to them. */
   async sendTaskAssigned(payload: {
     assigneeId:   string
     taskId:       string
@@ -225,22 +187,20 @@ export class EmailService implements OnModuleInit {
       : '—'
 
     await this.sendTransactional({
-      to:         { email: assignee.email, name: assignee.name },
-      templateId: BREVO_TEMPLATES.TASK_ASSIGNED,
+      to:       assignee,
+      template: 'TASK_ASSIGNED',
       params: {
-        ASSIGNEE_NAME: assignee.name,
-        TASK_TITLE:    payload.taskTitle,
-        PRIORITY:      payload.priority,
-        DUE_DATE:      dueDateFormatted,
-        CONTACT_NAME:  payload.contactName ?? '—',
-        CRM_URL:       `${process.env.FRONTEND_URL}/tasks`,
+        assignee_name: assignee.name,
+        task_title:    payload.taskTitle,
+        priority:      payload.priority,
+        due_date:      dueDateFormatted,
+        contact_name:  payload.contactName ?? '—',
+        crm_url:       `${process.env.FRONTEND_URL}/tasks`,
       },
       createdBy: payload.createdById,
-      subject:   `Nouvelle tâche assignée : ${payload.taskTitle}`,
     })
   }
 
-  /** Send a welcome email to a newly invited user. */
   async sendWelcomeInvitation(payload: {
     recipientEmail: string
     recipientName:  string
@@ -248,187 +208,115 @@ export class EmailService implements OnModuleInit {
     loginUrl:       string
   }): Promise<void> {
     await this.sendTransactional({
-      to:         { email: payload.recipientEmail, name: payload.recipientName },
-      templateId: BREVO_TEMPLATES.WELCOME,
+      to:       { email: payload.recipientEmail, name: payload.recipientName },
+      template: 'WELCOME',
       params: {
-        FULL_NAME: payload.recipientName,
-        ROLE:      payload.role,
-        LOGIN_URL: payload.loginUrl,
+        full_name: payload.recipientName,
+        role:      payload.role,
+        login_url: payload.loginUrl,
       },
     })
   }
 
-  /** @deprecated Use sendLeadAssigned() instead. Kept for backward compatibility. */
-  async sendLeadWelcomeEmail(params: {
-    contactEmail:   string
-    contactName:    string
-    leadTitle:      string
-    commercialName: string
-    contactId:      string
-    leadId:         string
-    createdBy:      string
-  }) {
-    return this.sendTransactional({
-      to:         { email: params.contactEmail, name: params.contactName },
-      templateId: BREVO_TEMPLATES.LEAD_ASSIGNED,
-      params: {
-        CONTACT_NAME:    params.contactName,
-        LEAD_TITLE:      params.leadTitle,
-        COMMERCIAL_NAME: params.commercialName,
-      },
-      contactId: params.contactId,
-      leadId:    params.leadId,
-      createdBy: params.createdBy,
-    })
-  }
-
-  /** @deprecated Use sendLeadAssigned() instead. Kept for backward compatibility. */
-  async sendFollowUpEmail(params: {
-    contactEmail:  string
-    contactName:   string
-    leadTitle:     string
-    daysInactive:  number
-    contactId:     string
-    leadId:        string
-    createdBy:     string
-  }) {
-    return this.sendTransactional({
-      to:         { email: params.contactEmail, name: params.contactName },
-      templateId: BREVO_TEMPLATES.LEAD_STATUS_CHANGED,
-      params: {
-        CONTACT_NAME:  params.contactName,
-        LEAD_TITLE:    params.leadTitle,
-        DAYS_INACTIVE: params.daysInactive,
-      },
-      contactId: params.contactId,
-      leadId:    params.leadId,
-      createdBy: params.createdBy,
-    })
-  }
-
-  // ── Campaigns ───────────────────────────────────────────────────────────────
+  // ── Campaigns ───────────────────────────────────────────────
 
   async createCampaign(data: {
-    name:        string
-    subject:     string
-    htmlContent: string
+    name:         string
+    subject:      string
+    htmlContent:  string
     scheduledAt?: Date
-    listIds:     number[]
-    createdBy:   string
+    listIds:      number[]
+    createdBy:    string
   }) {
-    const brevoPayload: any = {
-      name:        data.name,
-      subject:     data.subject,
-      sender:      {
-        name:  process.env.BREVO_SENDER_NAME  ?? 'CRM',
-        email: process.env.BREVO_SENDER_EMAIL,
-      },
-      type:        'classic',
-      htmlContent: data.htmlContent,
-      recipients:  { listIds: data.listIds },
-    }
-
-    if (data.scheduledAt) {
-      brevoPayload.scheduledAt = data.scheduledAt.toISOString()
-    }
-
-    const result = await this.brevoRequest('/emailCampaigns', 'POST', brevoPayload)
-
-    const [campaign] = await db.insert(emailCampaigns).values({
-      name:              data.name,
-      subject:           data.subject,
-      brevo_campaign_id: result.id,
-      status:            data.scheduledAt ? 'planifiée' : 'brouillon',
-      scheduled_at:      data.scheduledAt,
-      created_by:        data.createdBy,
-    }).returning()
-
+    // Resend n'a pas d'API campaigns — on stocke en DB avec statut "brouillon"
+    const [campaign] = await db
+      .insert(emailCampaigns)
+      .values({
+        name:         data.name,
+        subject:      data.subject,
+        status:       data.scheduledAt ? 'planifiée' : 'brouillon',
+        scheduled_at: data.scheduledAt,
+        created_by:   data.createdBy,
+      })
+      .returning()
     return campaign
   }
 
   async syncCampaignStats(campaignId: string) {
+    // Non applicable avec Resend — retourne les données DB telles quelles
+    const [campaign] = await db
+      .select()
+      .from(emailCampaigns)
+      .where(eq(emailCampaigns.id, campaignId))
+      .limit(1)
+    return campaign ?? null
+  }
+
+  async getCampaignStats(_brevoCampaignId: number) {
+    // Conservé pour compatibilité avec CommunicationsService
+    return null
+  }
+
+  async addContactToList(
+    _email:     string,
+    _firstName: string,
+    _lastName:  string,
+    _listId:    number,
+  ) {
+    this.logger.warn('addContactToList: non applicable avec Resend.')
+  }
+
+  async calculateAndSaveRoi(campaignId: string): Promise<{
+    cost:    number
+    revenue: number
+    roi:     number | null
+  }> {
     const [campaign] = await db
       .select()
       .from(emailCampaigns)
       .where(eq(emailCampaigns.id, campaignId))
       .limit(1)
 
-    if (!campaign?.brevo_campaign_id) return null
+    if (!campaign) throw new NotFoundException('Campagne introuvable')
 
-    const stats      = await this.brevoRequest(`/emailCampaigns/${campaign.brevo_campaign_id}`, 'GET')
-    const statistics = stats.statistics?.campaignStats?.[0]
+    const cost    = Number(campaign.cost             ?? 0)
+    const revenue = Number(campaign.revenue_generated ?? 0)
+    const roi     = cost > 0 ? ((revenue - cost) / cost) * 100 : null
 
-    const [updated] = await db
+    await db
+      .update(emailCampaigns)
+      .set({ roi: roi !== null ? String(roi.toFixed(2)) : null })
+      .where(eq(emailCampaigns.id, campaignId))
+
+    return { cost, revenue, roi }
+  }
+
+  async updateFinancials(
+    campaignId: string,
+    data: {
+      cost?:              number
+      revenue_generated?: number
+      conversion_count?:  number
+    },
+  ): Promise<void> {
+    await db
       .update(emailCampaigns)
       .set({
-        sent_count: statistics?.delivered ?? 0,
-        open_rate:  statistics?.uniqueOpens && statistics?.delivered
-          ? (statistics.uniqueOpens / statistics.delivered * 100).toFixed(2)
-          : null,
-        click_rate: statistics?.uniqueClicks && statistics?.delivered
-          ? (statistics.uniqueClicks / statistics.delivered * 100).toFixed(2)
-          : null,
-        status:     stats.status === 'sent' ? 'envoyée' : campaign.status,
-        sent_at:    stats.sentDate ? new Date(stats.sentDate) : null,
+        ...(data.cost              !== undefined && { cost:              String(data.cost) }),
+        ...(data.revenue_generated !== undefined && { revenue_generated: String(data.revenue_generated) }),
+        ...(data.conversion_count  !== undefined && { conversion_count:  data.conversion_count }),
         updated_at: new Date(),
       })
       .where(eq(emailCampaigns.id, campaignId))
-      .returning()
 
-    return updated
+    await this.calculateAndSaveRoi(campaignId)
   }
 
-  /** Fetch live stats for a campaign — used by CommunicationsService.syncCampaignStats() */
-  async getCampaignStats(brevoCampaignId: number): Promise<{
-    sentCount:  number
-    openRate:   number
-    clickRate:  number
-    unsubscribeCount: number
-    bounceCount:      number
-  } | null> {
-    try {
-      const stats = await this.brevoRequest(`/emailCampaigns/${brevoCampaignId}`, 'GET')
-      const s     = stats.statistics?.globalStats ?? stats.statistics?.campaignStats?.[0]
-      if (!s) return null
+  // ── Private helpers ─────────────────────────────────────────
 
-      const sent   = Number(s.sent ?? s.delivered ?? 0)
-      const opens  = Number(s.uniqueOpens  ?? 0)
-      const clicks = Number(s.uniqueClicks ?? 0)
-      const unsubscribes = Number(s.unsubscriptions ?? s.unsubscribes ?? 0)
-      const bounces      = Number(s.hardBounces ?? 0) + Number(s.softBounces ?? 0)
-
-      return {
-        sentCount:  sent,
-        openRate:   sent > 0 ? Math.round((opens  / sent) * 10000) / 100 : 0,
-        clickRate:  sent > 0 ? Math.round((clicks / sent) * 10000) / 100 : 0,
-        unsubscribeCount: unsubscribes,
-        bounceCount:      bounces,
-      }
-    } catch (err: any) {
-      this.logger.error(`getCampaignStats(${brevoCampaignId}): ${err?.message}`)
-      return null
-    }
-  }
-
-  // ── Contacts / Lists ────────────────────────────────────────────────────────
-
-  async addContactToList(email: string, firstName: string, lastName: string, listId: number) {
-    try {
-      await this.brevoRequest('/contacts', 'POST', {
-        email,
-        attributes:    { FIRSTNAME: firstName, LASTNAME: lastName },
-        listIds:       [listId],
-        updateEnabled: true,
-      })
-    } catch {
-      this.logger.warn(`Could not add ${email} to Brevo list ${listId}`)
-    }
-  }
-
-  // ── Private helpers ─────────────────────────────────────────────────────────
-
-  /** Resolve a profile's email + display name via Supabase admin API. */
-  private async getProfileEmail(profileId: string): Promise<{ email: string; name: string } | null> {
+  private async getProfileEmail(
+    profileId: string,
+  ): Promise<{ email: string; name: string } | null> {
     try {
       const { createClient } = await import('@supabase/supabase-js')
       const adminClient = createClient(
@@ -439,7 +327,9 @@ export class EmailService implements OnModuleInit {
 
       const { data: userData, error } = await adminClient.auth.admin.getUserById(profileId)
       if (error || !userData?.user?.email) {
-        this.logger.warn(`Could not retrieve email for profileId=${profileId}: ${error?.message}`)
+        this.logger.warn(
+          `Impossible de récupérer l'email pour profileId=${profileId}: ${error?.message}`
+        )
         return null
       }
 
@@ -454,14 +344,13 @@ export class EmailService implements OnModuleInit {
         name:  profile?.full_name ?? userData.user.email,
       }
     } catch (err: any) {
-      this.logger.error(`getProfileEmail error: ${err?.message}`)
+      this.logger.error(`getProfileEmail: ${err?.message}`)
       return null
     }
   }
 
-  /** Persist an email send event in the communications table. */
   private async logCommunication(data: {
-    templateId: number
+    template:   string
     subject:    string
     contactId?: string
     leadId?:    string
@@ -472,65 +361,16 @@ export class EmailService implements OnModuleInit {
       await db.insert(communications).values({
         type:             'email',
         subject:          data.subject,
-        body:             `Template #${data.templateId}`,
+        body:             `Template: ${data.template}`,
         direction:        'sortant',
         occurred_at:      new Date(),
         contact_id:       data.contactId ?? null,
         lead_id:          data.leadId    ?? null,
-        brevo_message_id: data.messageId || null,
+        brevo_message_id: data.messageId || null, // colonne réutilisée pour l'ID Resend
         created_by:       data.createdBy,
       })
     } catch (err: any) {
-      this.logger.error(`logCommunication error: ${err?.message}`)
+      this.logger.error(`logCommunication: ${err?.message}`)
     }
-  }
-
-  // Calcul et persistance du ROI 
-  async calculateAndSaveRoi(campaignId: string): Promise<{
-    cost: number
-    revenue: number
-    roi: number | null
-  }> {
-    const [campaign] = await db
-      .select()
-      .from(emailCampaigns)
-      .where(eq(emailCampaigns.id, campaignId))
-      .limit(1)
-
-    if (!campaign) throw new NotFoundException('Campagne introuvable')
-
-    const cost    = Number(campaign.cost    ?? 0)
-    const revenue = Number(campaign.revenue_generated ?? 0)
-
-    // ROI = (Gain net / Coût) × 100
-    // Exemple : coût 500€, revenus 2000€ → ROI = (1500/500)*100 = 300%
-    const roi = cost > 0 ? ((revenue - cost) / cost) * 100 : null
-
-    await db
-      .update(emailCampaigns)
-      .set({ roi: roi !== null ? String(roi.toFixed(2)) : null })
-      .where(eq(emailCampaigns.id, campaignId))
-
-    return { cost, revenue, roi }
-  }
-
-  // Mise à jour des données financières + recalcul ROI
-  async updateFinancials(campaignId: string, data: {
-    cost?:              number
-    revenue_generated?: number
-    conversion_count?:  number
-  }): Promise<void> {
-    await db
-      .update(emailCampaigns)
-      .set({
-        ...(data.cost              !== undefined && { cost: String(data.cost) }),
-        ...(data.revenue_generated !== undefined && { revenue_generated: String(data.revenue_generated) }),
-        ...(data.conversion_count  !== undefined && { conversion_count: data.conversion_count }),
-        updated_at: new Date(),
-      })
-      .where(eq(emailCampaigns.id, campaignId))
-
-    // Recalcule immédiatement après la mise à jour
-    await this.calculateAndSaveRoi(campaignId)
   }
 }

@@ -52,7 +52,7 @@ const INPUT_READONLY = [
   'cursor-default select-text',
 ].join(' ')
 
-const SELECT      = INPUT + ' cursor-pointer'
+const SELECT          = INPUT + ' cursor-pointer'
 const SELECT_READONLY = INPUT_READONLY
 
 function Field({
@@ -82,10 +82,10 @@ function Field({
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TYPE_OPTIONS = [
-  { value: TaskType.Rappel,     label: 'Rappel',      Icon: Bell,         activeColor: 'border-amber-500 bg-amber-950/40 text-amber-400'      },
-  { value: TaskType.RendezVous, label: 'Rendez-vous', Icon: CalendarDays, activeColor: 'border-blue-500  bg-blue-950/40  text-blue-400'        },
-  { value: TaskType.Appel,      label: 'Appel',       Icon: Phone,        activeColor: 'border-emerald-500 bg-emerald-950/40 text-emerald-400' },
-  { value: TaskType.Tache,      label: 'Tâche',       Icon: CheckSquare,  activeColor: 'border-slate-500 bg-slate-800/60 text-slate-300'       },
+  { value: TaskType.Rappel,     label: 'Rappel',      Icon: Bell,         activeColor: 'border-amber-500 bg-amber-950/40 text-amber-400'        },
+  { value: TaskType.RendezVous, label: 'Rendez-vous', Icon: CalendarDays, activeColor: 'border-blue-500  bg-blue-950/40  text-blue-400'          },
+  { value: TaskType.Appel,      label: 'Appel',       Icon: Phone,        activeColor: 'border-emerald-500 bg-emerald-950/40 text-emerald-400'   },
+  { value: TaskType.Tache,      label: 'Tâche',       Icon: CheckSquare,  activeColor: 'border-slate-500 bg-slate-800/60 text-slate-300'         },
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -96,9 +96,9 @@ interface TaskFormProps {
   open:      boolean
   onClose:   () => void
   onSubmit:  (values: TaskFormValues) => Promise<void>
-  onEdit?:   () => void   // appelé quand l'utilisateur clique "Modifier" en mode lecture
+  onEdit?:   () => void
   task?:     Task
-  readOnly?: boolean      // true = mode consultation, false/absent = création ou édition
+  readOnly?: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -109,7 +109,7 @@ export function TaskForm({ open, onClose, onSubmit, onEdit, task, readOnly = fal
   const isEditing  = Boolean(task) && !readOnly
   const isCreating = !task
   const { contacts, leads } = useFormOptions()
-  console.log('task reçu dans TaskForm :', task)
+
   const defaults = {
     title:       task?.title       ?? '',
     description: task?.description ?? '',
@@ -128,6 +128,7 @@ export function TaskForm({ open, onClose, onSubmit, onEdit, task, readOnly = fal
 
   useEffect(() => {
     if (open) reset(defaults)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, task, contacts, leads])
 
   async function handleValid(values: Schema) {
@@ -135,21 +136,12 @@ export function TaskForm({ open, onClose, onSubmit, onEdit, task, readOnly = fal
       ...values,
       due_date: values.due_date || undefined,
     }
-
-    // Supprimer les clés UUID vides plutôt qu'envoyer null/''
-    // Le backend ne touche pas aux champs absents d'un PATCH
     if (!values.contact_id) delete payload.contact_id
     if (!values.lead_id)    delete payload.lead_id
-    console.log('PAYLOAD ENVOYÉ :', JSON.stringify(payload, null, 2))
     await onSubmit(payload as TaskFormValues)
     onClose()
   }
-  // Ajouter temporairement dans TaskForm pour debugger
-console.log('contact_id en base :', task?.contact_id)
-console.log('options disponibles :', contacts.map(c => c.id))
-console.log('trouvé ?', contacts.some(c => c.id === task?.contact_id))
 
-  // Titre et sous-titre dynamiques selon le mode
   const modalTitle = readOnly
     ? 'Détail de la tâche'
     : isEditing
@@ -172,7 +164,6 @@ console.log('trouvé ?', contacts.some(c => c.id === task?.contact_id))
       size="lg"
       footer={
         readOnly ? (
-          // ── Mode lecture : Fermer + bouton Modifier ───────────────────────
           <>
             <Button variant="ghost" size="sm" onClick={onClose}>
               Fermer
@@ -189,7 +180,6 @@ console.log('trouvé ?', contacts.some(c => c.id === task?.contact_id))
             )}
           </>
         ) : (
-          // ── Mode création / édition ───────────────────────────────────────
           <>
             <Button variant="ghost" size="sm" onClick={onClose} disabled={isSubmitting}>
               Annuler
@@ -245,7 +235,6 @@ console.log('trouvé ?', contacts.some(c => c.id === task?.contact_id))
                       type="button"
                       role="radio"
                       aria-checked={active}
-                      // En mode lecture : désactiver les clics sur les types non actifs
                       onClick={() => { if (!readOnly) field.onChange(value) }}
                       className={[
                         'flex flex-col items-center gap-2 py-4 px-2',
@@ -324,9 +313,10 @@ console.log('trouvé ?', contacts.some(c => c.id === task?.contact_id))
                 disabled={readOnly}
                 className={`${readOnly ? SELECT_READONLY : SELECT} pl-9`}
               >
-                console.log('shape options contact :', contacts[0])
                 <option value="">Aucun contact</option>
-                {contacts.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                {contacts.map(c => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
               </select>
             </div>
           </Field>
@@ -338,9 +328,10 @@ console.log('trouvé ?', contacts.some(c => c.id === task?.contact_id))
                 disabled={readOnly}
                 className={`${readOnly ? SELECT_READONLY : SELECT} pl-9`}
               >
-                console.log('shape options leads :', leads[0])
                 <option value="">Aucun lead</option>
-                {leads.map(l => <option key={l.id} value={l.id}>{l.label}</option>)}
+                {leads.map(l => (
+                  <option key={l.id} value={l.id}>{l.label}</option>
+                ))}
               </select>
             </div>
           </Field>

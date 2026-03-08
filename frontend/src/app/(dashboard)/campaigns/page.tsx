@@ -35,6 +35,7 @@ import { Button }             from '@/components/ui/Button'
 import { formatDate }         from '@/lib/utils'
 import { CampaignModal }      from '@/components/campaigns/CampaignModal'
 import type { EmailCampaign } from '@/types'
+import {calculateRoi}          from '@/lib/utils'
 
 // ── Flag mock — passer à false dès que Brevo est branché ─────
 const USE_MOCK_DATA = true
@@ -86,21 +87,6 @@ const MOCK_CAMPAIGNS: EmailCampaign[] = [
 ]
 
 // ── Helpers ROI ───────────────────────────────────────────────
-
-/**
- * Calcule le ROI à partir du coût et du chiffre d'affaires généré.
- * Formule : (revenue - cost) / cost × 100
- * Retourne null si le coût est absent ou nul (non renseigné).
- *
- * Utilisée en frontend pour affichage immédiat ; le backend
- * persiste la même valeur via email.service.calculateAndSaveRoi().
- */
-export function calculateRoi(cost?: number | null, revenue?: number | null): number | null {
-  const c = Number(cost   ?? 0)
-  const r = Number(revenue ?? 0)
-  if (c <= 0) return null          // coût non renseigné → ROI incalculable
-  return Math.round(((r - c) / c) * 100 * 10) / 10
-}
 
 /** Formate un ROI numérique en chaîne affichable, ex: "+340%" ou "—". */
 function formatRoi(roi: number | null | undefined): string {

@@ -1,14 +1,13 @@
 // ============================================================
 // communications/communications.service.ts
-// CRUD + timeline per contact/lead + Brevo send-and-log
 // ============================================================
 
 import { Injectable, NotFoundException } from '@nestjs/common'
-import { db } from '../database/db.config'
-import { communications, profiles, contacts, leads, emailCampaigns } from '../database/schema'
-import { eq, and, desc, sql } from 'drizzle-orm'
-import { EmailService } from '../email/email.service'
-import { CreateCommunicationDto } from './dto/create-communication.dto'
+import { db }                            from '../database/db.config'
+import { communications, profiles, emailCampaigns } from '../database/schema'
+import { eq, and, desc, sql }            from 'drizzle-orm'
+import { EmailService }                  from '../email/email.service'
+import { CreateCommunicationDto }        from './dto/create-communication.dto'
 
 @Injectable()
 export class CommunicationsService {
@@ -16,10 +15,6 @@ export class CommunicationsService {
 
   // ── Timeline (GET /communications/timeline?contact_id=) ────
 
-  /**
-   * Returns all communications linked to a contact (or lead),
-   * ordered newest-first. Powers the contact detail timeline.
-   */
   async getTimeline(filters: {
     contact_id?: string
     lead_id?:    string
@@ -59,10 +54,6 @@ export class CommunicationsService {
 
   // ── Create (POST /communications) ─────────────────────────
 
-  /**
-   * Manually log a communication (call, meeting, note, SMS).
-   * For outbound emails, also triggers a Brevo send if an email contact is provided.
-   */
   async create(dto: CreateCommunicationDto, userId: string) {
     const [newComm] = await db
       .insert(communications)
@@ -91,7 +82,7 @@ export class CommunicationsService {
       .where(
         and(
           eq(communications.id, id),
-          eq(communications.created_by, userId), // users can only delete their own
+          eq(communications.created_by, userId),
         )
       )
       .returning({ id: communications.id })
@@ -133,42 +124,12 @@ export class CommunicationsService {
   // ── Campaign stats sync ───────────────────────────────────
 
   /**
-   * Pull live stats for all campaigns from Brevo and persist them.
-   * Call from a cron job (e.g. every hour).
+   * Avec Resend, il n'y a pas d'API campaigns.
+   * Les stats sont mises à jour via les webhooks Resend (email.delivered,
+   * email.opened, email.clicked…) directement dans webhooks.controller.ts.
+   * Cette méthode est conservée pour ne pas casser le controller existant.
    */
   async syncCampaignStats(): Promise<{ synced: number; failed: number }> {
-    const allCampaigns = await db
-      .select({
-        id:                emailCampaigns.id,
-        brevo_campaign_id: emailCampaigns.brevo_campaign_id,
-      })
-      .from(emailCampaigns)
-      .where(sql`brevo_campaign_id IS NOT NULL`)
-
-    let synced = 0
-    let failed = 0
-
-    for (const campaign of allCampaigns) {
-      if (!campaign.brevo_campaign_id) continue
-
-      const stats = await this.emailService.getCampaignStats(campaign.brevo_campaign_id)
-      if (!stats) { failed++; continue }
-
-      await db
-        .update(emailCampaigns)
-        .set({
-          sent_count: stats.sentCount,
-          open_rate:  String(stats.openRate),
-          click_rate: String(stats.clickRate),
-          unsubscribe_count: stats.unsubscribeCount,
-          bounce_count: stats.bounceCount, 
-          updated_at: new Date(),
-        })
-        .where(eq(emailCampaigns.id, campaign.id))
-
-      synced++
-    }
-
-    return { synced, failed }
+    return { synced: 0, failed: 0 }
   }
 }
