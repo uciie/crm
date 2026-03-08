@@ -22,20 +22,8 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - PORT=3001
-      - NODE_ENV=development
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET}
-      - BREVO_API_KEY=${BREVO_API_KEY}
+      # Seules les vars qui n'existent pas dans backend/.env vont ici
       - CHOKIDAR_USEPOLLING=true
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    # ── Watch natif Docker Compose ──────────────────────────────────────────
     develop:
       watch:
         # Synchronise les fichiers sources sans rebuild
@@ -66,16 +54,13 @@ services:
     env_file:
       - ./frontend/.env.local
     environment:
-      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-      - NEXT_PUBLIC_API_URL=http://localhost:3001
+      # Seules les vars absentes de frontend/.env.local vont ici
       - API_INTERNAL_URL=http://backend:3001
       - WATCHPACK_POLLING=true
       - CHOKIDAR_USEPOLLING=true
     depends_on:
       backend:
-        condition: service_healthy
-    # ── Watch natif Docker Compose ──────────────────────────────────────────
+        condition: service_started
     develop:
       watch:
         # Synchronise tout le code source
