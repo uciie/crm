@@ -155,7 +155,7 @@ export class ContactsService {
       .values({ ...createContactDto, created_by: userId })
       .returning()
 
-    // Email de bienvenue via Resend — ne bloque jamais la création
+    // Email de bienvenue — ne bloque jamais la création
     if (newContact?.email) {
       this.emailService
         .sendWelcomeInvitation({
@@ -165,8 +165,14 @@ export class ContactsService {
           loginUrl:       `${process.env.FRONTEND_URL}/login`,
         })
         .catch((err) =>
-          console.error("Échec de l'envoi de l'email de bienvenue:", err?.message)
+          // Log COMPLET visible dans Vercel Runtime Logs
+          console.error(
+            `[ContactsService] ❌ Échec email de bienvenue pour contact=${newContact.id}`,
+            { message: err?.message, stack: err?.stack, name: err?.name }
+          )
         )
+    } else {
+      console.log(`[ContactsService] ℹ️ Contact créé sans email (id=${newContact?.id}) — pas d'email de bienvenue.`)
     }
 
     return newContact

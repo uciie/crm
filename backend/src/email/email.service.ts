@@ -1,97 +1,141 @@
 // ============================================================
-// email/email.service.ts  —  Resend
+// email/email.service.ts  —  Resend (SDK officiel)
 // ============================================================
 
-import {
-  Injectable, Logger, OnModuleInit, NotFoundException,
-} from '@nestjs/common'
-import { Resend }       from 'resend'
-import { db }           from '../database/db.config'
+import { Injectable, Logger, OnModuleInit, NotFoundException } from '@nestjs/common'
+import { Resend } from 'resend'
+import { db } from '../database/db.config'
 import { emailCampaigns, communications, profiles } from '../database/schema'
-import { eq }           from 'drizzle-orm'
-import { TEMPLATES, validateTemplates, type TemplateName, type TemplatePayload } from './templates.config'
+import { eq } from 'drizzle-orm'
+import {
+  TEMPLATES,
+  validateTemplates,
+  type TemplateName,
+  type TemplatePayload,
+} from './templates.config'
 
-// ── Types ──────────────────────────────────────────────────────
-
-export interface EmailRecipient { email: string; name?: string }
+export interface EmailRecipient {
+  email: string
+  name?: string
+}
 
 export interface TransactionalEmailOptions {
   to:          EmailRecipient | EmailRecipient[]
   template:    TemplateName
-  // params est Record<string, any> — chaque template documente ses propres clés
   params:      Record<string, any>
   contactId?:  string
   leadId?:     string
   createdBy?:  string
 }
 
-// ── Service ────────────────────────────────────────────────────
-
 @Injectable()
 export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name)
-  private resend!: Resend
+  private resend: Resend | null = null
 
+  // ── "CRM <onboarding@resend.dev>" ─────────────────────────
   private get senderFrom(): string {
     const name  = process.env.RESEND_SENDER_NAME  ?? 'CRM'
     const email = process.env.RESEND_SENDER_EMAIL ?? ''
+    if (!email) {
+      this.logger.error('RESEND_SENDER_EMAIL manquant dans les variables d\'environnement !')
+    }
     return `${name} <${email}>`
   }
 
   onModuleInit() {
     const apiKey = process.env.RESEND_API_KEY
+
+    // Log détaillé pour Vercel Runtime Logs
+    this.logger.log(`=== EmailService init ===`)
+    this.logger.log(`RESEND_API_KEY présente ? ${!!apiKey} (préfixe: ${apiKey?.substring(0, 6) ?? 'N/A'})`)
+    this.logger.log(`RESEND_SENDER_EMAIL: ${process.env.RESEND_SENDER_EMAIL ?? '⚠️ MANQUANT'}`)
+    this.logger.log(`RESEND_SENDER_NAME:  ${process.env.RESEND_SENDER_NAME  ?? '⚠️ MANQUANT'}`)
+
     if (!apiKey) {
-      this.logger.error('RESEND_API_KEY manquant — envoi désactivé.')
+      this.logger.error('❌ RESEND_API_KEY manquante — les emails sont DÉSACTIVÉS.')
       return
     }
+
     this.resend = new Resend(apiKey)
     validateTemplates()
-    this.logger.log('EmailService (Resend) initialisé ✔')
+    this.logger.log('✅ EmailService (Resend SDK) initialisé avec succès')
   }
 
-  // ── Core sender ─────────────────────────────────────────────
+  // ── Envoi principal ────────────────────────────────────────
 
   async sendTransactional(options: TransactionalEmailOptions): Promise<string | null> {
+    // Garde-fou : SDK non initialisé
     if (!this.resend) {
-      this.logger.warn('Resend non initialisé — envoi ignoré.')
+      this.logger.error('❌ sendTransactional: Resend non initialisé (RESEND_API_KEY absente ?)')
       return null
     }
 
+    // Résolution du template
     const renderer = TEMPLATES[options.template]
     if (!renderer) {
-      this.logger.error(`Template inconnu : ${options.template}`)
+      this.logger.error(`❌ Template inconnu : "${options.template}"`)
       return null
     }
 
-    // renderer est désormais (params: any) => TemplatePayload — aucune erreur TS
     const { subject, html }: TemplatePayload = renderer(options.params)
     const toArray = Array.isArray(options.to) ? options.to : [options.to]
+    const toFormatted = toArray.map(r => (r.name ? `${r.name} <${r.email}>` : r.email))
+
+    this.logger.log(`📧 Envoi email — template="${options.template}" to="${toFormatted.join(', ')}" from="${this.senderFrom}"`)
 
     let messageId: string | null = null
 
     try {
+      // ── Appel SDK Resend officiel ──────────────────────────
       const { data, error } = await this.resend.emails.send({
-        from:    this.senderFrom,
-        to:      toArray.map(r => r.name ? `${r.name} <${r.email}>` : r.email),
+        from:     this.senderFrom,
+        to:       toFormatted,
         subject,
         html,
-        replyTo: process.env.RESEND_REPLY_TO,
+        replyTo:  process.env.RESEND_REPLY_TO,
       })
 
+      // Resend retourne { data: null, error: {...} } en cas d'échec
+      // (pas d'exception levée — il faut vérifier `error` explicitement)
       if (error) {
-        this.logger.error(`Resend error: ${JSON.stringify(error)}`)
+        // Log COMPLET de l'objet error pour Vercel Runtime Logs
+        this.logger.error(
+          `❌ Resend API error — template="${options.template}"\n` +
+          `   name:    ${(error as any).name ?? 'N/A'}\n` +
+          `   message: ${(error as any).message ?? JSON.stringify(error)}\n` +
+          `   statusCode: ${(error as any).statusCode ?? 'N/A'}\n` +
+          `   from:    ${this.senderFrom}\n` +
+          `   to:      ${toFormatted.join(', ')}`
+        )
+
+        // Conseils ciblés selon le code d'erreur
+        const statusCode = (error as any).statusCode
+        if (statusCode === 403) {
+          this.logger.error('   💡 403 = domaine expéditeur non vérifié dans le dashboard Resend, OU clé API sans permission "emails:send"')
+        } else if (statusCode === 422) {
+          this.logger.error('   💡 422 = adresse "from" invalide ou domaine non vérifié. Vérifiez RESEND_SENDER_EMAIL.')
+        } else if (statusCode === 401) {
+          this.logger.error('   💡 401 = RESEND_API_KEY invalide ou révoquée.')
+        }
+
         return null
       }
 
       messageId = data?.id ?? null
-      this.logger.debug(
-        `Email envoyé — template=${options.template} id=${messageId}`
-      )
+      this.logger.log(`✅ Email envoyé — id="${messageId}" template="${options.template}"`)
+
     } catch (err: any) {
-      this.logger.error(`sendTransactional failed: ${err?.message}`)
+      // Exception réseau ou autre erreur non gérée par le SDK
+      this.logger.error(
+        `❌ sendTransactional exception — template="${options.template}"\n` +
+        `   message: ${err?.message}\n` +
+        `   stack:   ${err?.stack}`
+      )
       return null
     }
 
+    // Log en base si les IDs sont fournis
     if (options.createdBy && (options.contactId || options.leadId) && messageId) {
       await this.logCommunication({
         template:  options.template,
@@ -106,7 +150,26 @@ export class EmailService implements OnModuleInit {
     return messageId
   }
 
-  // ── Domain triggers ─────────────────────────────────────────
+  // ── Déclencheurs métier ────────────────────────────────────
+
+  async sendWelcomeInvitation(payload: {
+    recipientEmail: string
+    recipientName:  string
+    role:           string
+    loginUrl:       string
+  }): Promise<void> {
+    this.logger.log(`📧 sendWelcomeInvitation → ${payload.recipientEmail}`)
+
+    await this.sendTransactional({
+      to: { email: payload.recipientEmail, name: payload.recipientName },
+      template: 'WELCOME',
+      params: {
+        full_name: payload.recipientName,
+        role:      payload.role,
+        login_url: payload.loginUrl,
+      },
+    })
+  }
 
   async sendLeadAssigned(payload: {
     assigneeId:   string
@@ -201,24 +264,7 @@ export class EmailService implements OnModuleInit {
     })
   }
 
-  async sendWelcomeInvitation(payload: {
-    recipientEmail: string
-    recipientName:  string
-    role:           string
-    loginUrl:       string
-  }): Promise<void> {
-    await this.sendTransactional({
-      to:       { email: payload.recipientEmail, name: payload.recipientName },
-      template: 'WELCOME',
-      params: {
-        full_name: payload.recipientName,
-        role:      payload.role,
-        login_url: payload.loginUrl,
-      },
-    })
-  }
-
-  // ── Campaigns ───────────────────────────────────────────────
+  // ── Campaigns ──────────────────────────────────────────────
 
   async createCampaign(data: {
     name:         string
@@ -228,7 +274,6 @@ export class EmailService implements OnModuleInit {
     listIds:      number[]
     createdBy:    string
   }) {
-    // Resend n'a pas d'API campaigns — on stocke en DB avec statut "brouillon"
     const [campaign] = await db
       .insert(emailCampaigns)
       .values({
@@ -243,7 +288,6 @@ export class EmailService implements OnModuleInit {
   }
 
   async syncCampaignStats(campaignId: string) {
-    // Non applicable avec Resend — retourne les données DB telles quelles
     const [campaign] = await db
       .select()
       .from(emailCampaigns)
@@ -253,24 +297,16 @@ export class EmailService implements OnModuleInit {
   }
 
   async getCampaignStats(_brevoCampaignId: number) {
-    // Conservé pour compatibilité avec CommunicationsService
     return null
   }
 
   async addContactToList(
-    _email:     string,
-    _firstName: string,
-    _lastName:  string,
-    _listId:    number,
+    _email: string, _firstName: string, _lastName: string, _listId: number,
   ) {
     this.logger.warn('addContactToList: non applicable avec Resend.')
   }
 
-  async calculateAndSaveRoi(campaignId: string): Promise<{
-    cost:    number
-    revenue: number
-    roi:     number | null
-  }> {
+  async calculateAndSaveRoi(campaignId: string) {
     const [campaign] = await db
       .select()
       .from(emailCampaigns)
@@ -279,7 +315,7 @@ export class EmailService implements OnModuleInit {
 
     if (!campaign) throw new NotFoundException('Campagne introuvable')
 
-    const cost    = Number(campaign.cost             ?? 0)
+    const cost    = Number(campaign.cost              ?? 0)
     const revenue = Number(campaign.revenue_generated ?? 0)
     const roi     = cost > 0 ? ((revenue - cost) / cost) * 100 : null
 
@@ -291,14 +327,9 @@ export class EmailService implements OnModuleInit {
     return { cost, revenue, roi }
   }
 
-  async updateFinancials(
-    campaignId: string,
-    data: {
-      cost?:              number
-      revenue_generated?: number
-      conversion_count?:  number
-    },
-  ): Promise<void> {
+  async updateFinancials(campaignId: string, data: {
+    cost?: number; revenue_generated?: number; conversion_count?: number
+  }): Promise<void> {
     await db
       .update(emailCampaigns)
       .set({
@@ -312,7 +343,7 @@ export class EmailService implements OnModuleInit {
     await this.calculateAndSaveRoi(campaignId)
   }
 
-  // ── Private helpers ─────────────────────────────────────────
+  // ── Helpers privés ─────────────────────────────────────────
 
   private async getProfileEmail(
     profileId: string,
@@ -327,9 +358,7 @@ export class EmailService implements OnModuleInit {
 
       const { data: userData, error } = await adminClient.auth.admin.getUserById(profileId)
       if (error || !userData?.user?.email) {
-        this.logger.warn(
-          `Impossible de récupérer l'email pour profileId=${profileId}: ${error?.message}`
-        )
+        this.logger.warn(`Impossible de récupérer l'email pour profileId=${profileId}: ${error?.message}`)
         return null
       }
 
@@ -350,12 +379,8 @@ export class EmailService implements OnModuleInit {
   }
 
   private async logCommunication(data: {
-    template:   string
-    subject:    string
-    contactId?: string
-    leadId?:    string
-    createdBy:  string
-    messageId:  string
+    template: string; subject: string; contactId?: string;
+    leadId?: string; createdBy: string; messageId: string
   }): Promise<void> {
     try {
       await db.insert(communications).values({
@@ -366,7 +391,7 @@ export class EmailService implements OnModuleInit {
         occurred_at:      new Date(),
         contact_id:       data.contactId ?? null,
         lead_id:          data.leadId    ?? null,
-        brevo_message_id: data.messageId || null, // colonne réutilisée pour l'ID Resend
+        brevo_message_id: data.messageId,
         created_by:       data.createdBy,
       })
     } catch (err: any) {
