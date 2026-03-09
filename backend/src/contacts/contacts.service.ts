@@ -155,8 +155,9 @@ export class ContactsService {
       .values({ ...createContactDto, created_by: userId })
       .returning()
 
-    // Email de bienvenue — ne bloque jamais la création
     if (newContact?.email) {
+
+      // 1. Email de bienvenue — via Brevo transactionnel
       this.emailService
         .sendWelcomeInvitation({
           recipientEmail: newContact.email,
@@ -164,15 +165,22 @@ export class ContactsService {
           role:           'contact',
           loginUrl:       `${process.env.FRONTEND_URL}/login`,
         })
-        .catch((err) =>
-          // Log COMPLET visible dans Vercel Runtime Logs
-          console.error(
-            `[ContactsService] ❌ Échec email de bienvenue pour contact=${newContact.id}`,
-            { message: err?.message, stack: err?.stack, name: err?.name }
+        .catch(err => console.error(`❌ sendWelcomeInvitation: ${err?.message}`))
+
+      // 2. Sync liste Brevo — uniquement si abonné
+      if (newContact.is_subscribed) {
+        this.emailService
+          .addContactToList(
+            newContact.email,
+            newContact.first_name,
+            newContact.last_name,
+            Number(process.env.BREVO_LIST_ID ?? 7),
           )
-        )
+          .catch(err => console.error(`❌ addContactToList: ${err?.message}`))
+      }
+
     } else {
-      console.log(`[ContactsService] ℹ️ Contact créé sans email (id=${newContact?.id}) — pas d'email de bienvenue.`)
+      console.log(`[ContactsService] ℹ️ Contact sans email — pas d'email de bienvenue`)
     }
 
     return newContact
