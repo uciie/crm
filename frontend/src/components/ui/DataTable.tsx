@@ -34,7 +34,7 @@ export function DataTable<T extends { id: string }>({
           <tr>
             {columns.map(col => (
               <th key={col.key} style={{ width: col.width }}
-                className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                className="px-3 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 {col.label}
               </th>
             ))}
@@ -51,7 +51,7 @@ export function DataTable<T extends { id: string }>({
               onClick={() => onRowClick?.(row)}
             >
               {columns.map(col => (
-                <td key={col.key} className="px-5 py-3.5 text-sm text-gray-700">
+                <td key={col.key} className="px-3 py-3 text-sm text-gray-700">
                   {col.render ? col.render(row) : String((row as any)[col.key] ?? '—')}
                 </td>
               ))}
