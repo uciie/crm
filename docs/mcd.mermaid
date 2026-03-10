@@ -8,27 +8,38 @@ erDiagram
 
     COMPANIES ||--o{ CONTACTS : "company_id"
     COMPANIES ||--o{ LEADS : "company_id"
+    COMPANIES ||--o{ TASKS : "company_id"
+    COMPANIES ||--o{ COMMUNICATIONS : "company_id"
     
     CONTACTS ||--o{ LEADS : "contact_id"
     CONTACTS ||--o{ TASKS : "contact_id"
+    CONTACTS ||--o{ COMMUNICATIONS : "contact_id"
     
     LEADS ||--o{ PIPELINE_DEALS : "lead_id"
+    LEADS ||--o{ TASKS : "lead_id"
+    LEADS ||--o{ COMMUNICATIONS : "lead_id"
+    
     PIPELINE_STAGES ||--o{ PIPELINE_DEALS : "stage_id"
 
     PROFILES {
         uuid id PK
         string full_name "Non_Nullable"
-        user_role role "Non_Nullable"
-        boolean is_active "Non_Nullable"
+        string avatar_url
+        user_role role "Default: utilisateur"
+        string phone
+        boolean is_active "Default: true"
     }
 
     COMPANIES {
         uuid id PK
         string name "Non_Nullable"
         string domain UK
-        industry_type industry "Nullable"
-        string city "Nullable"
-        numeric annual_revenue "Nullable"
+        string industry
+        string size
+        string city
+        string country "Default: France"
+        numeric annual_revenue
+        text notes
         uuid created_by FK
     }
 
@@ -37,42 +48,76 @@ erDiagram
         string first_name "Non_Nullable"
         string last_name "Non_Nullable"
         string email UK
+        string phone
+        string job_title
+        array tags
+        boolean is_subscribed "Default: true"
         uuid company_id FK
-        boolean is_subscribed "Non_Nullable"
+        uuid assigned_to FK
+        uuid created_by FK
     }
 
     LEADS {
         uuid id PK
         string title "Non_Nullable"
-        lead_status status "Non_Nullable"
-        numeric value "Nullable"
-        int probability "0_to_100"
+        lead_status status "Default: nouveau"
+        numeric value
+        smallint probability "0_to_100"
+        date expected_close_date
         uuid contact_id FK
         uuid company_id FK
+        uuid assigned_to FK
     }
 
     TASKS {
         uuid id PK
         string title "Non_Nullable"
-        task_status status "Non_Nullable"
-        task_priority priority "Non_Nullable"
-        task_type type "Non_Nullable"
-        timestamp due_date "Nullable"
+        text description
+        task_status status "Default: à_faire"
+        task_priority priority "Default: moyenne"
+        task_type type "Default: tache"
+        timestamp due_date
         uuid assigned_to FK
+        uuid contact_id FK
+        uuid lead_id FK
+        uuid company_id FK
     }
 
     COMMUNICATIONS {
         uuid id PK
         comm_type type "Non_Nullable"
-        string direction "entrant_sortant"
-        string status "Non_Nullable"
+        string subject
+        text body
+        string direction "entrant / sortant"
+        string status "Default: sent"
         string brevo_message_id UK
         uuid contact_id FK
+        uuid lead_id FK
+        uuid company_id FK
+        uuid created_by FK
+    }
+
+    PIPELINE_STAGES {
+        uuid id PK
+        string name "Non_Nullable"
+        string stage "Non_Nullable"
+        smallint order_index "Non_Nullable"
+        string color "Default: #6366f1"
     }
 
     PIPELINE_DEALS {
         uuid id PK
         uuid lead_id FK
         uuid stage_id FK
-        timestamp entered_stage_at "Non_Nullable"
+        timestamp entered_stage_at "Default: now()"
+    }
+
+    EMAIL_CAMPAIGNS {
+        uuid id PK
+        string name "Non_Nullable"
+        string subject "Non_Nullable"
+        campaign_status status "Default: brouillon"
+        numeric cost
+        numeric revenue_generated
+        uuid created_by FK
     }

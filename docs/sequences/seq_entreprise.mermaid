@@ -1,3 +1,17 @@
+%%{init: {
+  'theme': 'neutral',
+  'themeVariables': {
+    'primaryColor': '#ffffff',
+    'primaryTextColor': '#000000',
+    'primaryBorderColor': '#000000',
+    'lineColor': '#000000',
+    'secondaryColor': '#f4f4f4',
+    'tertiaryColor': '#ffffff',
+    'mainBkg': '#ffffff',
+    'nodeTextColor': '#000000'
+  }
+}}%%
+
 sequenceDiagram
     autonumber
     actor C as 💼 Commercial
@@ -6,7 +20,7 @@ sequenceDiagram
     participant DB as 🗄️ Supabase DB
 
     %% ─── LISTER / FILTRER ────────────────────────────────
-    rect rgb(0, 0, 0)
+    rect rgb(255,255,255)
         Note over C,DB: 📋 Scénario 1 — Lister et filtrer les entreprises
         C->>FE: Accède à /entreprises
         FE->>BE: GET /companies?industry=tech&city=Paris
@@ -17,7 +31,7 @@ sequenceDiagram
     end
 
     %% ─── CRÉER UNE ENTREPRISE ────────────────────────────
-    rect rgb(0, 0, 0)
+    rect rgb(255,255,255)
         Note over C,DB: ➕ Scénario 2 — Créer une entreprise
         C->>FE: Remplit formulaire (nom, domaine, secteur, ville, CA…)
         FE->>BE: POST /companies { name, domain, industry, city, annual_revenue }
@@ -30,7 +44,7 @@ sequenceDiagram
     end
 
     %% ─── VOIR DÉTAIL ─────────────────────────────────────
-    rect rgb(0, 0, 0)
+    rect rgb(255,255,255)
         Note over C,DB: 🔍 Scénario 3 — Détail entreprise + contacts + leads
         C->>FE: Clique sur une entreprise
         FE->>BE: GET /companies/:id

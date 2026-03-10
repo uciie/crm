@@ -1,51 +1,76 @@
+%%{init: {
+  'theme': 'neutral',
+  'themeVariables': {
+    'primaryColor': '#ffffff',
+    'primaryTextColor': '#000000',
+    'primaryBorderColor': '#000000',
+    'lineColor': '#000000',
+    'secondaryColor': '#f4f4f4',
+    'tertiaryColor': '#ffffff',
+    'mainBkg': '#ffffff',
+    'nodeTextColor': '#000000'
+  }
+}}%%
+
 sequenceDiagram
     autonumber
     actor C as 💼 Commercial
     participant FE as 🌐 Next.js Frontend
     participant BE as 🛠️ NestJS Backend
-    participant DB as 🗄️ Supabase DB
+    participant DB as 🗄️ PostgreSQL
+    participant ES as 📧 EmailService
 
-    %% ─── CRÉER UNE TÂCHE ─────────────────────────────────
-    rect rgb(0, 0, 0)
-        Note over C,DB: ➕ Scénario 1 — Créer une tâche
-        C->>FE: Remplit formulaire (titre, type, priorité, date, contact…)
+    rect rgb(255,255,255)
+        Note over C,ES: ➕ Création d'une tâche
+        C->>FE: Remplit formulaire (titre, type, priorité, date, contact, responsable)
         FE->>BE: POST /tasks { title, type, priority, due_date, contact_id, assigned_to }
-        BE->>DB: INSERT INTO tasks RETURNING *
-        DB-->>BE: tâche { id, title, status: "pending", priority, due_date }
-        BE-->>FE: 201 { task }
-        FE-->>C: Tâche visible dans la liste + calendrier
+        BE->>BE: ValidationPipe — @MinDate() rejette les dates passées
+        alt Date invalide
+            BE-->>FE: 400 "La date d'échéance ne peut pas être dans le passé."
+        else Payload valide
+            BE->>DB: INSERT INTO tasks RETURNING *
+            DB-->>BE: tâche { id, title, status: "à_faire", priority, due_date }
+            alt assigned_to ≠ créateur
+                BE--)ES: sendTaskAssigned() [fire-and-forget]
+                ES--)DB: INSERT INTO communications (type: email, brevo_message_id)
+            end
+            BE-->>FE: 201 { task }
+            FE-->>C: Tâche visible dans la liste et le calendrier
+        end
     end
 
-    %% ─── VUE CALENDRIER ──────────────────────────────────
-    rect rgb(0, 0, 0)
-        Note over C,DB: 📅 Scénario 2 — Vue calendrier des tâches
-        C->>FE: Bascule vers la vue Calendrier
-        FE->>BE: GET /tasks?view=calendar&month=2024-03
-        BE->>DB: SELECT tasks WHERE due_date BETWEEN :start AND :end<br/>AND assigned_to = :userId
-        DB-->>BE: [{ id, title, due_date, status, priority }]
-        BE-->>FE: { tasks }
-        Note over FE: Positionne les tâches<br/>sur le calendrier selon due_date
-        FE-->>C: Calendrier avec tâches colorées par priorité
-    end
+    rect rgb(255,255,255)
+        Note over C,DB: 🔄 Progression du cycle de vie
+        C->>FE: Passe la tâche en "en_cours"
+        FE->>BE: PATCH /tasks/:id { status: "en_cours" }
+        BE->>DB: UPDATE tasks SET status = "en_cours", updated_at = NOW()
+        DB-->>BE: tâche mise à jour
+        BE-->>FE: 200 { task }
 
-    %% ─── KPIs + TÂCHES EN RETARD ─────────────────────────
-    rect rgb(0, 0, 0)
-        Note over C,DB: 📊 Scénario 3 — KPIs et tâches en retard
-        C->>FE: Accède au dashboard tâches
-        FE->>BE: GET /tasks/kpis
-        BE->>DB: SELECT COUNT(*) FILTER (WHERE status='pending') AS pending,<br/>COUNT(*) FILTER (WHERE due_date < NOW() AND status != 'done') AS overdue
-        DB-->>BE: { pending, overdue, in_progress, done }
-        BE-->>FE: { kpis }
-        FE-->>C: Affiche compteurs KPIs (badges retard en rouge)
-    end
-
-    %% ─── MARQUER TERMINÉE ────────────────────────────────
-    rect rgb(0, 0, 0)
-        Note over C,DB: ✅ Scénario 4 — Marquer une tâche terminée
-        C->>FE: Coche la tâche
-        FE->>BE: PATCH /tasks/:id { status: "done" }
-        BE->>DB: UPDATE tasks SET status = "done", completed_at = NOW()
+        C->>FE: Marque la tâche comme terminée
+        FE->>BE: PATCH /tasks/:id { status: "terminée" }
+        BE->>DB: UPDATE tasks SET status = "terminée", completed_at = NOW()
+        Note over BE: completed_at est renseigné\nautomatiquement si absent du DTO
         DB-->>BE: tâche mise à jour
         BE-->>FE: 200 { task }
         FE-->>C: Tâche barrée + KPIs recalculés
+    end
+
+    rect rgb(255,255,255)
+        Note over C,DB: 📊 Calcul des KPIs et notifications
+        C->>FE: Consulte le dashboard tâches
+        FE->>BE: GET /tasks/stats
+        BE->>DB: SELECT COUNT(*) FILTER (WHERE status = 'à_faire') AS todo,\n COUNT(*) FILTER (WHERE due_date < NOW() AND status NOT IN ('terminée','annulée')) AS overdue,\n COUNT(*) FILTER (WHERE priority IN ('haute','urgente') ...) AS urgent
+        Note over BE: Filtre selon le rôle :\nAdmin → toutes les tâches\nCommercial → assigned_to = userId
+        DB-->>BE: { todo, in_progress, done, overdue, due_soon }
+        BE-->>FE: { kpis }
+        FE-->>C: Compteurs affichés (retards en rouge)
+
+        C->>FE: Consulte les notifications
+        FE->>BE: GET /notifications
+        BE->>DB: SELECT id, title, due_date, type,\n CASE WHEN due_date < NOW() THEN 'overdue'\n WHEN due_date::date = CURRENT_DATE THEN 'reminder'\n WHEN due_date <= NOW() + INTERVAL '24h' THEN 'due_soon' END AS notif_type\n FROM tasks WHERE assigned_to = :userId
+        DB-->>BE: tâches avec type de notification
+        Note over BE: IDs déterministes : taskId-overdue\nÉtat "lu" conservé en mémoire (Map)
+        BE-->>FE: AppNotification[]
+        FE-->>C: Alertes affichées (badge avec compteur)
     end

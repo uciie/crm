@@ -1,3 +1,17 @@
+%%{init: {
+  'theme': 'neutral',
+  'themeVariables': {
+    'primaryColor': '#ffffff',
+    'primaryTextColor': '#000000',
+    'primaryBorderColor': '#000000',
+    'lineColor': '#000000',
+    'secondaryColor': '#f4f4f4',
+    'tertiaryColor': '#ffffff',
+    'mainBkg': '#ffffff',
+    'nodeTextColor': '#000000'
+  }
+}}%%
+
 sequenceDiagram
     autonumber
     actor C as 💼 Commercial
@@ -6,7 +20,7 @@ sequenceDiagram
     participant DB as 🗄️ Supabase DB
 
     %% ─── CRÉER UN LEAD ───────────────────────────────────
-    rect rgb(0, 0, 0)
+    rect rgb(255,255,255)
         Note over C,DB: ➕ Scénario 1 — Créer un lead
         C->>FE: Remplit formulaire (titre, valeur, probabilité, contact…)
         FE->>BE: POST /leads { title, value, probability, contact_id, company_id }
@@ -19,7 +33,7 @@ sequenceDiagram
     end
 
     %% ─── VOIR DÉTAIL + VALEUR PONDÉRÉE ──────────────────
-    rect rgb(0, 0, 0)
+    rect rgb(255,255,255)
         Note over C,DB: 📊 Scénario 2 — Détail lead + valeur pondérée
         C->>FE: Ouvre un lead
         FE->>BE: GET /leads/:id
@@ -34,7 +48,7 @@ sequenceDiagram
     end
 
     %% ─── CHANGER STATUT D'UN LEAD ────────────────────────
-    rect rgb(0, 0, 0)
+    rect rgb(255,255,255)
         Note over C,DB: 🔄 Scénario 3 — Changer le statut
         C->>FE: Sélectionne nouveau statut (Qualifié, Gagné, Perdu…)
         FE->>BE: PATCH /leads/:id { status: "won" }

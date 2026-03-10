@@ -1,0 +1,27 @@
+graph TD
+    U(["👤 Utilisateur"])
+    C(["💼 Commercial"])
+    A(["🛡️ Administrateur"])
+
+    UC1["Consulter ses notifications"]
+    UC2["Marquer une notification comme lue"]
+    UC3["Marquer toutes les notifications comme lues"]
+    UC4["Recevoir une alerte de retard (overdue)"]
+    UC5["Recevoir un rappel du jour (reminder)"]
+    UC6["Recevoir une alerte imminente (due_soon)"]
+    UC7["Être authentifié"]
+
+    U --> UC1
+    U --> UC2
+    U --> UC3
+    C --> UC1
+    C --> UC2
+    C --> UC3
+    A --> UC1
+    A --> UC2
+    A --> UC3
+
+    UC1 -.->|include| UC7
+    UC1 -.->|extend| UC4
+    UC1 -.->|extend| UC5
+    UC1 -.->|extend| UC6

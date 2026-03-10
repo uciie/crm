@@ -1,3 +1,18 @@
+%%{init: {
+  'theme': 'neutral',
+  'themeVariables': {
+    'primaryColor': '#ffffff',
+    'primaryTextColor': '#000000',
+    'primaryBorderColor': '#000000',
+    'lineColor': '#000000',
+    'secondaryColor': '#f4f4f4',
+    'tertiaryColor': '#ffffff',
+    'mainBkg': '#ffffff',
+    'nodeTextColor': '#000000'
+  }
+}}%%
+
+
 sequenceDiagram
     autonumber
     actor C as 💼 Commercial
@@ -6,7 +21,7 @@ sequenceDiagram
     participant DB as 🗄️ Supabase DB
 
     %% ─── LISTER / FILTRER ────────────────────────────────
-    rect rgb(0, 0, 0)
+    rect rgb(255, 255, 255)
         Note over C,DB: 📋 Scénario 1 — Lister & filtrer les contacts
         C->>FE: Accède à /contacts
         FE->>BE: GET /contacts?search=dupont&company=ACME
@@ -17,7 +32,7 @@ sequenceDiagram
     end
 
     %% ─── CRÉER UN CONTACT ────────────────────────────────
-    rect rgb(0, 0, 0)
+    rect rgb(255, 255, 255)
         Note over C,DB: ➕ Scénario 2 — Créer un contact
         C->>FE: Remplit formulaire (prénom, nom, email, société…)
         FE->>BE: POST /contacts { first_name, last_name, email, company_id }
@@ -28,7 +43,7 @@ sequenceDiagram
     end
 
     %% ─── VOIR DÉTAIL + TIMELINE ──────────────────────────
-    rect rgb(0, 0, 0)
+    rect rgb(255, 255, 255)
         Note over C,DB: 🔍 Scénario 3 — Détail contact + timeline
         C->>FE: Clique sur un contact
         FE->>BE: GET /contacts/:id
@@ -45,7 +60,7 @@ sequenceDiagram
     end
 
     %% ─── MODIFIER UN CONTACT ────────────────────────────
-    rect rgb(0, 0, 0)
+    rect rgb(255, 255, 255)
         Note over C,DB: ✏️ Scénario 4 — Modifier un contact
         C->>FE: Modifie champs dans le formulaire
         FE->>BE: PATCH /contacts/:id { email, phone... }

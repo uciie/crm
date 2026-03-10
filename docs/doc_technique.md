@@ -1,103 +1,58 @@
 # Documentation technique — CRM Pro
 
-> Ce document centralise l'ensemble des éléments techniques du projet : modèle de données, cas d'utilisation, séquences d'interactions et référentiel API.
+> Ce document centralise l'ensemble des éléments techniques du projet : analyse des besoins, modèle de données, cas d'utilisation, séquences d'interactions, description des fonctionnalités et référentiel API.
 
 ---
 
 ## Table des matières
 
-1. [Modèle de données (MCD)](#1-modèle-de-données-mcd)
-2. [Acteurs et rôles](#2-acteurs-et-rôles)
-3. [Cas d'utilisation](#3-cas-dutilisation)
-4. [Diagrammes de séquences](#4-diagrammes-de-séquences)
-5. [Référentiel des endpoints API](#5-référentiel-des-endpoints-api)
+1. [Analyse des Besoins](#1-analyse-des-besoins)
+2. [Modèle de données (MCD)](#2-modèle-de-données-mcd)
+3. [Acteurs et rôles](#3-acteurs-et-rôles)
+4. [Cas d'utilisation (UML)](#4-cas-dutilisation-uml)
+5. [Diagrammes de séquences](#5-diagrammes-de-séquences)
+6. [Description des fonctionnalités](#6-description-des-fonctionnalités)
+7. [Référentiel des endpoints API](#7-référentiel-des-endpoints-api)
 
 ---
 
-## 1. Modèle de données (MCD)
+## 1. Analyse des Besoins
+
+### 1.1 Objectifs du Projet
+
+CRM Pro est une application de gestion de la relation client (Customer Relationship Management) destinée aux équipes commerciales de taille moyenne. Le projet vise à centraliser, automatiser et optimiser les interactions entre une organisation et ses prospects ou clients. Les trois axes stratégiques sont les suivants.
+
+**Gestion opérationnelle des relations clients.** Le CRM consolide dans un référentiel unique l'ensemble des données relatives aux entreprises, aux contacts, aux opportunités commerciales et aux communications. Cette centralisation élimine la fragmentation de l'information entre des outils hétérogènes et garantit une vision partagée et cohérente de chaque relation client.
+
+**Suivi du pipeline de vente.** Le module Pipeline matérialise le cycle de vie d'une opportunité commerciale sous la forme d'un tableau Kanban organisé en étapes séquentielles (prospect, qualification, proposition, négociation, gagné, perdu). Chaque déplacement d'un deal entre les étapes est traçable, horodaté et peut déclencher des notifications automatiques.
+
+**Automatisation marketing via Brevo.** L'intégration avec la plateforme Brevo (anciennement Sendinblue) permet de créer, planifier et envoyer des campagnes d'emailing depuis l'interface du CRM, de recevoir les événements de livraison en temps réel via des webhooks, et de déclencher des emails transactionnels automatiques lors des événements métier clés (création d'un lead, changement de statut, assignation d'une tâche).
+
+### 1.2 Besoins Fonctionnels par Profil
+
+Le système distingue quatre acteurs principaux aux périmètres d'accès différenciés.
+
+**Administrateur.** Accès complet à l'ensemble des modules. Ses besoins spécifiques concernent la gestion des utilisateurs : inviter de nouveaux membres, attribuer ou modifier les rôles, activer/désactiver des comptes, supprimer des profils. Il consulte les indicateurs de performance globaux couvrant l'intégralité des données du CRM. Il est le seul acteur autorisé à créer et envoyer des campagnes d'emailing.
+
+**Commercial.** Opère sur le périmètre de ses propres données. Il crée et gère les contacts, entreprises et leads qui lui sont assignés, fait avancer ses opportunités dans le pipeline Kanban, gère ses tâches et consulte les campagnes email en lecture seule. Ses indicateurs de performance sont filtrés automatiquement sur son périmètre d'assignation.
+
+**Utilisateur.** Accès en lecture seule sur les contacts et gestion de ses propres tâches. N'a pas accès au module des leads ni au pipeline de vente. Ce rôle correspond typiquement à un collaborateur en soutien commercial dont les droits d'édition doivent être limités.
+
+### 1.3 Enjeux de la Centralisation des Données
+
+**Unicité du référentiel.** Chaque entité (entreprise, contact, opportunité) possède un identifiant unique (UUID). Les relations entre entités sont matérialisées par des clés étrangères, garantissant l'intégrité référentielle et évitant les doublons.
+
+**Traçabilité des interactions.** Chaque communication (appel, email, réunion, note, SMS) est enregistrée dans la table `communications` avec son horodatage, son auteur, sa direction (entrant/sortant) et son statut de livraison, permettant de reconstituer l'historique complet d'une relation client.
+
+**Contrôle d'accès granulaire.** Le modèle RBAC (Role-Based Access Control) garantit que chaque utilisateur n'accède qu'aux données relevant de son périmètre. Les commerciaux sont isolés les uns des autres via le champ `assigned_to`.
+
+**Cohérence analytique.** Le rattachement systématique des leads, tâches et communications à des profils utilisateurs identifiés permet de calculer des indicateurs de performance (taux de conversion, CA par commercial, pipeline pondéré) fiables et auditables.
+
+---
+
+## 2. Modèle de données (MCD)
 
 ![Modèle de données](mcd.png)
-
-```mermaid
-erDiagram
-    PROFILES ||--o{ COMPANIES : "created_by"
-    PROFILES ||--o{ CONTACTS : "assigned_to / created_by"
-    PROFILES ||--o{ LEADS : "assigned_to / created_by"
-    PROFILES ||--o{ TASKS : "assigned_to / created_by"
-    PROFILES ||--o{ COMMUNICATIONS : "created_by"
-    PROFILES ||--o{ EMAIL_CAMPAIGNS : "created_by"
-
-    COMPANIES ||--o{ CONTACTS : "company_id"
-    COMPANIES ||--o{ LEADS : "company_id"
-
-    CONTACTS ||--o{ LEADS : "contact_id"
-    CONTACTS ||--o{ TASKS : "contact_id"
-
-    LEADS ||--o{ PIPELINE_DEALS : "lead_id"
-    PIPELINE_STAGES ||--o{ PIPELINE_DEALS : "stage_id"
-
-    PROFILES {
-        uuid id PK
-        string full_name "Non_Nullable"
-        user_role role "Non_Nullable"
-        boolean is_active "Non_Nullable"
-    }
-
-    COMPANIES {
-        uuid id PK
-        string name "Non_Nullable"
-        string domain UK
-        industry_type industry "Nullable"
-        string city "Nullable"
-        numeric annual_revenue "Nullable"
-        uuid created_by FK
-    }
-
-    CONTACTS {
-        uuid id PK
-        string first_name "Non_Nullable"
-        string last_name "Non_Nullable"
-        string email UK
-        uuid company_id FK
-        boolean is_subscribed "Non_Nullable"
-    }
-
-    LEADS {
-        uuid id PK
-        string title "Non_Nullable"
-        lead_status status "Non_Nullable"
-        numeric value "Nullable"
-        int probability "0_to_100"
-        uuid contact_id FK
-        uuid company_id FK
-    }
-
-    TASKS {
-        uuid id PK
-        string title "Non_Nullable"
-        task_status status "Non_Nullable"
-        task_priority priority "Non_Nullable"
-        task_type type "Non_Nullable"
-        timestamp due_date "Nullable"
-        uuid assigned_to FK
-    }
-
-    COMMUNICATIONS {
-        uuid id PK
-        comm_type type "Non_Nullable"
-        string direction "entrant_sortant"
-        string status "Non_Nullable"
-        string brevo_message_id UK
-        uuid contact_id FK
-    }
-
-    PIPELINE_DEALS {
-        uuid id PK
-        uuid lead_id FK
-        uuid stage_id FK
-        timestamp entered_stage_at "Non_Nullable"
-    }
-```
 
 ### Légende
 
@@ -111,22 +66,24 @@ erDiagram
 
 ### Relations structurantes
 
-Une `company` peut avoir plusieurs `contacts`. Un contact appartient à une seule entreprise.
+**Companies ↔ Contacts.** Une `company` peut avoir plusieurs `contacts`. Un contact appartient à une seule entreprise. La clé étrangère `company_id` est définie avec `ON DELETE SET NULL`, préservant les contacts si l'entreprise est supprimée.
 
-Un `contact` génère des `leads` (opportunités commerciales). Un lead est lié à la fois à un contact et à une entreprise.
+**Contacts ↔ Leads.** Un `contact` génère des `leads` (opportunités commerciales). Un lead est lié à la fois à un contact et à une entreprise.
 
-Un `lead` est transformé en `deal` dans le pipeline de vente. La table `pipeline_deals` matérialise cette transformation en associant un lead à une étape (`pipeline_stages`). L'horodatage `entered_stage_at` permet de mesurer le temps passé à chaque étape.
+**Leads ↔ Pipeline.** Un `lead` est transformé en `deal` dans le pipeline de vente. La table `pipeline_deals` matérialise cette transformation en associant un lead à une étape (`pipeline_stages`). L'horodatage `entered_stage_at` permet de mesurer le temps passé à chaque étape et de calculer la durée du cycle de vente.
 
-Les `tasks` et `communications` peuvent être rattachées à la fois à un contact et à un lead, permettant un historique complet de l'activité commerciale autour d'une opportunité.
+**Tasks et Communications (rattachement multiple).** Les `tasks` et `communications` peuvent être rattachées simultanément à un contact, un lead et une entreprise via trois clés étrangères nullable, permettant un historique complet de l'activité commerciale autour d'une opportunité.
+
+**Corrélation Brevo.** Le champ `brevo_message_id` sur la table `communications` permet de corréler les enregistrements locaux avec les événements de livraison reçus via les webhooks Brevo, assurant le suivi du statut de chaque email transactionnel (livré, ouvert, cliqué, rebondi).
 
 ---
 
-## 2. Acteurs et rôles
+## 3. Acteurs et rôles
 
 | Acteur | Rôle DB | Périmètre d'accès |
 |--------|---------|-------------------|
 | **Visiteur** | — | Pages publiques uniquement (login, register, reset) |
-| **Utilisateur** | `user` | Lecture contacts, tâches personnelles |
+| **Utilisateur** | `utilisateur` | Lecture contacts, tâches personnelles |
 | **Commercial** | `commercial` | CRUD contacts, entreprises, leads, pipeline, tâches — lecture stats campagnes |
 | **Administrateur** | `admin` | Accès complet + gestion utilisateurs + KPIs globaux |
 | **Supabase Auth** | Système externe | Authentification, émission JWT, emails système |
@@ -143,532 +100,352 @@ Les `tasks` et `communications` peuvent être rattachées à la fois à un conta
 | Gérer ses tâches | Oui | Oui | Oui |
 | Voir les campagnes | Oui | Oui (lecture) | Non |
 | Créer des campagnes | Oui | Non | Non |
+| Voir les notifications | Oui | Oui | Oui |
+| Consulter le dashboard KPIs | Oui (global) | Oui (périmètre) | Non |
 
 ---
 
-## 3. Cas d'utilisation
+## 4. Cas d'utilisation (UML)
 
-### Vue de synthèse — Tous les modules
+### 4.1 Vue de synthèse — Tous les modules
 
 ![Synthèse des cas d'utilisation](use_cases/synthese.png)
 
 ---
 
-### Module Acces (Authentification)
+### 4.2 Module Accès (Authentification)
 
-![Cas d'utilisation — Acces](use_cases/acces.png)
+![Cas d'utilisation — Accès](use_cases/acces.png)
+
+**Lacune identifiée et correction :** Les diagrammes originaux ne modélisaient pas les scénarios d'échec. Il est recommandé d'ajouter un cas d'utilisation `Gérer l'erreur d'authentification` en **extension** des cas `Se connecter` et `Vérifier JWT / Session`, avec des spécialisations pour les sous-types d'erreurs suivants :
+
+- `Token JWT expiré` → message "Session expirée. Veuillez vous reconnecter."
+- `Token absent` → message "Authentification requise."
+- `Token invalide` → message "Token invalide ou expiré."
+- `Compte désactivé` → message "Compte désactivé. Contactez votre administrateur." (vérifié via `is_active = false` dans `JwtStrategy.validate()`)
+
+Ces distinctions sont déjà implémentées dans `JwtAuthGuard` et `JwtStrategy` ; la modélisation UML doit les refléter.
 
 ---
 
-### Module Contacts
+### 4.3 Module Contacts
 
 ![Cas d'utilisation — Contacts](use_cases/contacts.png)
 
 ---
 
-### Module Entreprises
+### 4.4 Module Entreprises
 
 ![Cas d'utilisation — Entreprises](use_cases/entreprises.png)
 
 ---
 
-### Module Leads
+### 4.5 Module Leads
 
 ![Cas d'utilisation — Leads](use_cases/leads.png)
 
 ---
 
-### Module Pipeline (Kanban)
+### 4.6 Module Pipeline (Kanban)
 
 ![Cas d'utilisation — Pipeline](use_cases/pipeline.png)
 
 ---
 
-### Module Taches
+### 4.7 Module Tâches
 
-![Cas d'utilisation — Taches](use_cases/taches.png)
+![Cas d'utilisation — Tâches](use_cases/taches.png)
 
 ---
 
-### Module Campagnes Email
+### 4.8 Module Campagnes Email
 
 ![Cas d'utilisation — Campagnes Email](use_cases/campagne_email.png)
 
+**Lacune identifiée et correction :** Le cas d'utilisation `Recevoir un webhook Brevo` est présenté comme un cas unique. Il doit être décomposé en cas **étendus** selon le type d'événement, conformément à l'implémentation effective de `WebhooksController` :
+
+| Événement Brevo | Cas d'utilisation étendu |
+|-----------------|--------------------------|
+| `delivered`, `opened`, `clicked` | `Mettre à jour le statut de livraison` |
+| `soft_bounce`, `hard_bounce` | `Gérer un rebond` (+ stockage `delivery_error`) |
+| `unsubscribe` | `Désabonner un contact` (mise à jour `is_subscribed = false`) |
+| `blocked` | `Bloquer l'envoi` (+ stockage `delivery_error`) |
+| `request`, `deferred`, `spam` | `Horodater l'événement` (mise à jour `updated_at`) |
+
+**Lacune supplémentaire :** Le calcul du ROI (méthode `calculateAndSaveRoi()`) déclenché automatiquement lors de la mise à jour des données financières d'une campagne devrait être modélisé comme un acteur système secondaire (`Système CRM`) interagissant avec un cas d'utilisation `Calculer le ROI de la campagne`.
+
 ---
 
-### Module Administration
+### 4.9 Module Notifications 
+
+![Cas d'utilisation — Notification](use_cases/notification.png)
+
+---
+
+### 4.10 Module Administration
 
 ![Cas d'utilisation — Administration](use_cases/admin_gest_users.png)
 
 ---
 
-## 4. Diagrammes de séquences
+## 5. Diagrammes de séquences
 
----
-
-### Authentification (Login / Register / Reset)
+### 5.1 Authentification (Login / Register / Reset)
 
 ![Sequence — Authentification](sequences/seq_acces.png)
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor V as Visiteur
-    participant FE as Next.js Frontend
-    participant BE as NestJS Backend
-    participant SA as Supabase Auth
-    participant DB as Supabase DB
-
-    rect rgb(15, 23, 42)
-        Note over V,DB: Scenario 1 — Login
-        V->>FE: Saisit email + mot de passe
-        FE->>SA: signInWithPassword(email, password)
-        SA-->>FE: { access_token, refresh_token, user }
-        FE->>BE: GET /auth/me (Authorization: Bearer token)
-        BE->>SA: verifyJWT(token)
-        SA-->>BE: payload { sub, role }
-        BE->>DB: SELECT * FROM profiles WHERE id = sub
-        DB-->>BE: profil utilisateur
-        BE-->>FE: { user, role, permissions }
-        FE-->>V: Redirige vers /dashboard
-    end
-
-    rect rgb(15, 23, 42)
-        Note over V,DB: Scenario 2 — Inscription
-        V->>FE: Saisit email + mot de passe
-        FE->>SA: signUp(email, password)
-        SA->>V: Envoie email de confirmation
-        SA-->>FE: { user, session: null }
-        FE-->>V: "Verifiez votre boite email"
-        V->>SA: Clique lien de confirmation (PKCE)
-        SA-->>FE: Echange code -> access_token
-        FE->>DB: INSERT INTO profiles (id, full_name, role)
-        DB-->>FE: profil cree
-    end
-
-    rect rgb(15, 23, 42)
-        Note over V,DB: Scenario 3 — Reset mot de passe
-        V->>FE: Saisit son email
-        FE->>SA: resetPasswordForEmail(email)
-        SA->>V: Envoie email avec lien reset
-        V->>FE: Clique le lien, saisit nouveau mot de passe
-        FE->>SA: updateUser({ password })
-        SA-->>FE: { user } mis a jour
-        FE-->>V: "Mot de passe modifie, connectez-vous"
-    end
-```
-
 ---
 
-### Contacts
+### 5.2 Contacts
 
 ![Sequence — Contacts](sequences/seq_contacts.png)
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor C as Commercial
-    participant FE as Next.js Frontend
-    participant BE as NestJS Backend
-    participant DB as Supabase DB
-
-    rect rgb(15, 23, 42)
-        Note over C,DB: Scenario 1 — Lister et filtrer
-        C->>FE: Accede a /contacts
-        FE->>BE: GET /contacts?search=dupont&company=ACME
-        BE->>DB: SELECT contacts WHERE ... ORDER BY created_at DESC
-        DB-->>BE: [{ id, first_name, last_name, email, company }]
-        BE-->>FE: 200 { data: [...], total, page }
-        FE-->>C: Affiche liste paginee + filtres actifs
-    end
-
-    rect rgb(15, 23, 42)
-        Note over C,DB: Scenario 2 — Creer un contact
-        C->>FE: Remplit formulaire (prenom, nom, email, societe)
-        FE->>BE: POST /contacts { first_name, last_name, email, company_id }
-        BE->>DB: INSERT INTO contacts RETURNING *
-        DB-->>BE: contact cree { id, ... }
-        BE-->>FE: 201 { contact }
-        FE-->>C: Toast "Contact cree" + redirige vers /contacts/:id
-    end
-
-    rect rgb(15, 23, 42)
-        Note over C,DB: Scenario 3 — Detail + timeline
-        C->>FE: Clique sur un contact
-        FE->>BE: GET /contacts/:id
-        BE->>DB: SELECT contact + JOIN companies
-        DB-->>BE: { contact, company }
-        FE->>BE: GET /contacts/:id/communications
-        BE->>DB: SELECT communications WHERE contact_id = :id ORDER BY date DESC
-        DB-->>BE: [{ type, direction, status, date, content }]
-        FE->>BE: GET /contacts/:id/leads
-        BE->>DB: SELECT leads WHERE contact_id = :id
-        DB-->>BE: [{ id, title, status, value }]
-        BE-->>FE: Toutes les donnees agregees
-        FE-->>C: Affiche fiche contact + timeline + leads associes
-    end
-```
-
 ---
 
-### Entreprises
+### 5.3 Entreprises
 
 ![Sequence — Entreprises](sequences/seq_entreprises.png)
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor C as Commercial
-    participant FE as Next.js Frontend
-    participant BE as NestJS Backend
-    participant DB as Supabase DB
-
-    rect rgb(15, 23, 42)
-        Note over C,DB: Scenario 1 — Creer une entreprise
-        C->>FE: Remplit formulaire (nom, domaine, secteur, ville, CA)
-        FE->>BE: POST /companies { name, domain, industry, city, annual_revenue }
-        BE->>DB: SELECT companies WHERE domain = :domain
-        DB-->>BE: [] (verifie unicite du domaine)
-        BE->>DB: INSERT INTO companies RETURNING *
-        DB-->>BE: entreprise { id, name, domain }
-        BE-->>FE: 201 { company }
-        FE-->>C: Redirige vers /companies/:id
-    end
-
-    rect rgb(15, 23, 42)
-        Note over C,DB: Scenario 2 — Detail + contacts + leads
-        C->>FE: Clique sur une entreprise
-        FE->>BE: GET /companies/:id
-        BE->>DB: SELECT company WHERE id = :id
-        DB-->>BE: { company }
-        FE->>BE: GET /companies/:id/contacts
-        BE->>DB: SELECT contacts WHERE company_id = :id
-        DB-->>BE: [{ id, first_name, last_name, email }]
-        FE->>BE: GET /companies/:id/leads
-        BE->>DB: SELECT leads WHERE company_id = :id
-        DB-->>BE: [{ id, title, status, value }]
-        BE-->>FE: donnees agregees
-        FE-->>C: Fiche entreprise + onglets contacts/leads/stats
-    end
-```
-
 ---
 
-### Leads
+### 5.4 Leads
 
 ![Sequence — Leads](sequences/seq_leads.png)
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor C as Commercial
-    participant FE as Next.js Frontend
-    participant BE as NestJS Backend
-    participant DB as Supabase DB
-
-    rect rgb(15, 23, 42)
-        Note over C,DB: Scenario 1 — Creer un lead
-        C->>FE: Remplit formulaire (titre, valeur, probabilite, contact)
-        FE->>BE: POST /leads { title, value, probability, contact_id, company_id }
-        BE->>DB: INSERT INTO leads RETURNING *
-        DB-->>BE: lead { id, title, status: "new", value, probability }
-        BE->>DB: INSERT INTO pipeline_deals (lead_id, stage_id="Nouveau")
-        DB-->>BE: deal cree
-        BE-->>FE: 201 { lead, deal }
-        FE-->>C: Redirige vers /leads/:id
-    end
-
-    rect rgb(15, 23, 42)
-        Note over C,DB: Scenario 2 — Changer le statut
-        C->>FE: Selectionne nouveau statut (Qualifie, Gagne, Perdu)
-        FE->>BE: PATCH /leads/:id { status: "won" }
-        BE->>DB: UPDATE leads SET status = "won" WHERE id = :id
-        DB-->>BE: lead mis a jour
-        BE->>DB: UPDATE pipeline_deals SET stage_id = stage_gagne
-        DB-->>BE: deal mis a jour
-        BE-->>FE: 200 { lead }
-        FE-->>C: Badge statut mis a jour + toast
-    end
-```
-
 ---
 
-### Pipeline Kanban
+### 5.5 Pipeline Kanban
 
 ![Sequence — Pipeline](sequences/seq_pipeline.png)
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor C as Commercial
-    participant FE as Next.js Frontend
-    participant BE as NestJS Backend
-    participant DB as Supabase DB
+---
 
-    rect rgb(15, 23, 42)
-        Note over C,DB: Scenario 1 — Charger le Kanban
-        C->>FE: Accede a /pipeline
-        FE->>BE: GET /pipeline/stages
-        BE->>DB: SELECT pipeline_stages ORDER BY position
-        DB-->>BE: [{ id, name, color, position }]
-        FE->>BE: GET /pipeline/deals
-        BE->>DB: SELECT pipeline_deals JOIN leads JOIN contacts JOIN companies
-        DB-->>BE: [{ deal_id, lead, stage_id, value, contact }]
-        BE-->>FE: { stages, deals }
-        Note over FE: Groupe les deals par stage_id - Calcule valeur totale par colonne
-        FE-->>C: Affiche Kanban avec colonnes et cartes
-    end
+### 5.6 Cycle de vie d'une tâche *(enrichi)*
 
-    rect rgb(15, 23, 42)
-        Note over C,DB: Scenario 2 — Drag and drop
-        C->>FE: Glisse la carte vers une nouvelle colonne
-        Note over FE: Mise a jour optimiste de l'UI
-        FE->>BE: PATCH /pipeline/deals/:dealId { stage_id: "new_stage_id" }
-        BE->>DB: UPDATE pipeline_deals SET stage_id = :stage_id, entered_stage_at = NOW()
-        DB-->>BE: deal mis a jour
-        BE-->>FE: 200 { deal }
-        FE-->>C: Carte dans la nouvelle colonne, valeurs recalculees
-    end
-```
+![Sequence — Tâches](sequences/seq_taches.png)
 
 ---
 
-### Taches
-
-![Sequence — Taches](sequences/seq_taches.png)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor C as Commercial
-    participant FE as Next.js Frontend
-    participant BE as NestJS Backend
-    participant DB as Supabase DB
-
-    rect rgb(15, 23, 42)
-        Note over C,DB: Scenario 1 — Creer une tache
-        C->>FE: Remplit formulaire (titre, type, priorite, date, contact)
-        FE->>BE: POST /tasks { title, type, priority, due_date, contact_id, assigned_to }
-        BE->>DB: INSERT INTO tasks RETURNING *
-        DB-->>BE: tache { id, title, status: "pending", priority, due_date }
-        BE-->>FE: 201 { task }
-        FE-->>C: Tache visible dans la liste + calendrier
-    end
-
-    rect rgb(15, 23, 42)
-        Note over C,DB: Scenario 2 — KPIs et taches en retard
-        C->>FE: Accede au dashboard taches
-        FE->>BE: GET /tasks/kpis
-        BE->>DB: SELECT COUNT(*) FILTER (WHERE status='pending') AS pending, COUNT(*) FILTER (WHERE due_date < NOW() AND status != 'done') AS overdue
-        DB-->>BE: { pending, overdue, in_progress, done }
-        BE-->>FE: { kpis }
-        FE-->>C: Affiche compteurs KPIs (retard en rouge)
-    end
-
-    rect rgb(15, 23, 42)
-        Note over C,DB: Scenario 3 — Marquer terminee
-        C->>FE: Coche la tache
-        FE->>BE: PATCH /tasks/:id { status: "done" }
-        BE->>DB: UPDATE tasks SET status = "done", completed_at = NOW()
-        DB-->>BE: tache mise a jour
-        BE-->>FE: 200 { task }
-        FE-->>C: Tache barree + KPIs recalcules
-    end
-```
-
----
-
-### Campagnes Email (Brevo)
+### 5.7 Campagnes Email — Brevo *(enrichi)*
 
 ![Sequence — Campagnes Email](sequences/seq_campagne_email.png)
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor A as Administrateur
-    participant FE as Next.js Frontend
-    participant BE as NestJS Backend
-    participant DB as Supabase DB
-    participant BR as Brevo API
-
-    rect rgb(15, 23, 42)
-        Note over A,BR: Scenario 1 — Creer et envoyer une campagne
-        A->>FE: Remplit formulaire (sujet, template, liste contacts)
-        FE->>BE: POST /campaigns { subject, template_id, contact_list_ids }
-        BE->>DB: SELECT contacts WHERE id IN (...) AND is_subscribed = true
-        DB-->>BE: [{ email, first_name, last_name }]
-        BE->>BR: POST /emailCampaigns { name, subject, sender, recipients }
-        BR-->>BE: { id: brevo_campaign_id, status: "draft" }
-        BE->>DB: INSERT INTO email_campaigns (title, brevo_campaign_id, status)
-        DB-->>BE: campagne enregistree
-        BE->>BR: POST /emailCampaigns/:id/sendNow
-        BR-->>BE: { message: "Scheduled" }
-        BE-->>FE: 201 { campaign }
-        FE-->>A: Toast "Campagne envoyee"
-    end
-
-    rect rgb(15, 23, 42)
-        Note over A,BR: Scenario 2 — Synchroniser les metriques
-        A->>FE: Clique "Actualiser stats"
-        FE->>BE: POST /campaigns/:id/sync
-        BE->>BR: GET /emailCampaigns/:brevo_id
-        BR-->>BE: { openRate, clickRate, bounceRate, unsubscribeCount }
-        BE->>DB: UPDATE email_campaigns SET open_rate, click_rate, bounce_rate
-        DB-->>BE: mis a jour
-        BE-->>FE: 200 { stats }
-        FE-->>A: Statistiques mises a jour
-    end
-
-    rect rgb(15, 23, 42)
-        Note over A,BR: Scenario 3 — Webhook Brevo entrant
-        BR->>BE: POST /webhooks/brevo { event: "unsubscribe", email, messageId }
-        Note over BE: Verifie signature HMAC du webhook
-        BE->>DB: UPDATE contacts SET is_subscribed = false WHERE email = :email
-        DB-->>BE: contact mis a jour
-        BE-->>BR: 200 OK
-    end
-```
-
 ---
 
-### Administration
+### 5.8 Administration
 
 ![Sequence — Administration](sequences/seq_admin.png)
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor A as Administrateur
-    participant FE as Next.js Frontend
-    participant BE as NestJS Backend
-    participant DB as Supabase DB
-    participant SA as Supabase Auth
-    participant BR as Brevo
+---
 
-    rect rgb(15, 23, 42)
-        Note over A,BR: Scenario 1 — Inviter un utilisateur
-        A->>FE: Saisit email + role de l'invite
-        FE->>BE: POST /admin/users/invite { email, role }
-        BE->>SA: inviteUserByEmail(email)
-        SA->>A: Envoie email d'invitation (magic link)
-        SA-->>BE: { user: { id, email } }
-        BE->>DB: INSERT INTO profiles (id, role, is_active: true)
-        DB-->>BE: profil cree
-        BE->>BR: POST /smtp/email (email de bienvenue)
-        BR-->>BE: { messageId }
-        BE-->>FE: 201 { user }
-        FE-->>A: Toast "Invitation envoyee"
-    end
+## 6. Description des fonctionnalités
 
-    rect rgb(15, 23, 42)
-        Note over A,DB: Scenario 2 — Activer / Desactiver un compte
-        A->>FE: Toggle activation du compte
-        FE->>BE: PATCH /admin/users/:id { is_active: false }
-        BE->>DB: UPDATE profiles SET is_active = false WHERE id = :id
-        DB-->>BE: mis a jour
-        Note over BE: Le middleware auth verifie is_active a chaque requete
-        BE-->>FE: 200 { user }
-        FE-->>A: Compte desactive
-    end
+### 6.1 Gestion des Contacts
 
-    rect rgb(15, 23, 42)
-        Note over A,DB: Scenario 3 — Dashboard KPIs globaux
-        A->>FE: Accede a /admin/dashboard
-        FE->>BE: GET /admin/kpis
-        BE->>DB: SELECT COUNT(leads), SUM(value), COUNT(tasks WHERE overdue), COUNT(contacts), COUNT(campaigns)
-        DB-->>BE: { total_leads, pipeline_value, overdue_tasks, contacts, campaigns }
-        BE-->>FE: { kpis }
-        FE-->>A: Dashboard avec metriques globales
-    end
-```
+Le module Contacts constitue le cœur du référentiel client. Il permet de créer, consulter, modifier et supprimer des fiches contacts avec les informations suivantes : identité (prénom, nom, email, téléphone, mobile), localisation (adresse, ville, pays), profil professionnel (intitulé de poste, département, URL LinkedIn), et statut de consentement marketing (`is_subscribed`).
+
+Chaque contact peut être rattaché à une entreprise (`company_id`) et assigné à un commercial (`assigned_to`). Un contact sans assignation est visible par tous les commerciaux, ce qui permet la prise en charge des leads entrants non attribués.
+
+**Actions automatiques à la création.** Lorsqu'un contact est créé avec une adresse email renseignée, le service déclenche automatiquement deux actions asynchrones (fire-and-forget, sans bloquer la réponse HTTP) :
+- Envoi d'un email de bienvenue via le template `WELCOME`
+- Ajout du contact à la liste Brevo configurée (`BREVO_LIST_ID`) si `is_subscribed = true`
+
+**Filtrage et pagination.** La liste des contacts supporte une pagination (`page`/`limit`) et un filtrage multi-critères : recherche textuelle sur le prénom, le nom, l'email et l'intitulé de poste (`ILIKE` PostgreSQL), filtre par entreprise, par responsable, par statut d'abonnement et par ville.
+
+**Contrôle d'accès.** Les commerciaux voient leurs contacts assignés et les contacts non assignés. Les administrateurs voient l'ensemble des contacts.
+
+### 6.2 Gestion des Entreprises
+
+Le module Entreprises gère le référentiel des organisations clientes ou prospects. Chaque fiche entreprise comprend les informations d'identification (nom, domaine web — unique en base, secteur d'activité, taille), les coordonnées (téléphone, adresse, ville, pays), et les données financières (chiffre d'affaires annuel, logo).
+
+La vue de détail d'une entreprise consolide en une seule requête les informations de l'entreprise et la liste de ses contacts associés (jusqu'à 50 contacts). Cette agrégation évite les requêtes multiples depuis le frontend.
+
+**Statistiques disponibles via `GET /companies/stats` :**
+- Nombre total d'entreprises
+- Nombre de nouvelles entreprises dans le mois courant
+- Répartition par secteur d'activité (top 5, calculée par requête SQL directe)
+
+### 6.3 Pipeline de Vente (Module Kanban)
+
+Le module Pipeline matérialise la progression des opportunités commerciales sous la forme d'un tableau Kanban.
+
+**Structure du Kanban.** Le Kanban est organisé en étapes configurables (`pipeline_stages`), chacune caractérisée par un nom, un code d'étape normalisé (`prospect`, `qualification`, `proposition`, `négociation`, `gagné`, `perdu`), un indice d'ordre et une couleur. Chaque colonne affiche les deals associés, enrichis des informations du lead, du contact, de l'entreprise et du responsable via des jointures `LEFT JOIN`. La valeur totale de chaque colonne est calculée côté serveur.
+
+**Déplacement des deals et synchronisation des statuts.** Le déplacement d'un deal (`PATCH /pipeline/deals/:id/move`) met à jour simultanément deux tables :
+- `pipeline_deals` : nouvel `stage_id`, horodatage `entered_stage_at`
+- `leads` : mise à jour du statut selon la correspondance étape/statut (`stageToStatus`)
+
+Cette synchronisation bidirectionnelle garantit la cohérence entre la vue liste des leads et la vue Kanban.
+
+Tout déplacement vers une étape significative (qualifié, proposition, négociation, gagné, perdu) déclenche un email de notification asynchrone à l'assigné du lead via `EmailService.sendDealStageChanged`.
+
+**Statistiques du pipeline** (`GET /pipeline/stats`) :
+- Nombre de deals, valeur totale et probabilité moyenne par étape
+- Indicateur synthétique de **revenu pondéré** : somme des valeurs × probabilités de conversion, exprimée en euros (estimateur statistique du CA attendu)
+
+### 6.4 Suivi des Tâches
+
+Le module Tâches gère l'ensemble des activités planifiées des commerciaux : tâches ordinaires, rappels, rendez-vous et appels. Il est conçu pour alimenter à la fois une vue liste filtrable et une vue calendrier.
+
+**Création et assignation.** Une tâche est définie par son titre, son type (`tache`, `rappel`, `rendez-vous`, `appel`), sa priorité (`basse`, `moyenne`, `haute`, `urgente`), sa date d'échéance et ses relations optionnelles avec un contact, un lead et une entreprise. Lorsqu'une tâche est assignée à un autre commercial que le créateur, un email de notification est envoyé au responsable désigné.
+
+**Validation.** Le `ValidationPipe` de NestJS rejette toute date d'échéance passée via le décorateur `@MinDate()`.
+
+**Filtrage et vues.** La liste supporte les filtres : statut, priorité, type, responsable, contact/lead associé, indicateur de retard (`overdue`), plage de dates (`date_from`/`date_to` pour la vue calendrier). Les tâches sont triées par priorité décroissante puis par date d'échéance.
+
+**Cycle de vie.** Les statuts possibles sont `à_faire` → `en_cours` → `terminée` / `annulée`. Lors du passage au statut `terminée`, le champ `completed_at` est renseigné automatiquement si absent du DTO.
+
+**Notifications en temps réel.** Le module Notifications calcule à la volée, sans table dédiée, trois types d'alertes depuis les tâches de l'utilisateur :
+- `overdue` : échéance dépassée, statut actif
+- `reminder` : tâche due aujourd'hui
+- `due_soon` : tâche due dans les 24 prochaines heures
+
+Chaque notification possède un identifiant déterministe `taskId-type`, permettant un marquage "lu" idempotent. L'état de lecture est conservé en mémoire serveur par session (réinitialisé au redémarrage).
+
+### 6.5 Campagnes d'Emailing
+
+Le module Email centralise la gestion des communications marketing en masse et des emails transactionnels déclencheurs d'événements métier.
+
+**Campagnes marketing.** L'administrateur peut créer une campagne en saisissant le nom, le sujet, le contenu HTML et les identifiants des listes de destinataires Brevo. Une date de planification optionnelle permet de différer l'envoi. La campagne est créée simultanément dans Brevo (qui retourne un `brevo_campaign_id`) et en base de données locale.
+
+Les statistiques sont disponibles en lecture (taux d'ouverture, taux de clics, nombre de rebonds, désabonnements, conversions) et peuvent être synchronisées manuellement (`PATCH /email/campaigns/:id/sync`) ou automatiquement par le job CRON (toutes les 5 minutes pour les campagnes en statut `planifiée`).
+
+**Calcul du ROI.** Le module calcule le retour sur investissement de chaque campagne : `ROI = (revenus générés - coût) / coût × 100`. Les données financières sont saisies manuellement par l'administrateur et le ROI est mis en cache dans la colonne `roi` de la table `email_campaigns`.
+
+**Emails transactionnels.** Huit templates HTML sont définis localement dans `templates.config.ts` et rendus par Resend. La chaîne de délivrance utilise trois niveaux de fallback : API Brevo transactionnelle → Resend → SMTP Brevo. Chaque envoi réussi est journalisé dans la table `communications` avec le `messageId`, permettant le suivi du statut via les webhooks entrants.
+
+| Template | Déclencheur |
+|----------|-------------|
+| `WELCOME` | Création d'un contact avec email |
+| `LEAD_ASSIGNED` | Création d'un lead avec assignation |
+| `DEAL_STAGE_CHANGED` | Déplacement d'un deal dans le pipeline |
+| `LEAD_WON` | Deal passé au statut "gagné" |
+| `LEAD_LOST` | Deal passé au statut "perdu" |
+| `TASK_ASSIGNED` | Tâche assignée à un autre utilisateur |
+| `TASK_DUE_SOON` | Tâche dont l'échéance approche |
+| `RESET_PASSWORD` | Demande de réinitialisation de mot de passe |
+
+### 6.6 Indicateurs de Performance (KPIs) par Rôle
+
+Tous les KPIs supportent un filtre de période paramétré (`startDate` / `endDate`) permettant de comparer les performances sur des plages personnalisées (mois, trimestre, année). En l'absence de paramètres, la période par défaut est le mois courant. Le service calcule également les valeurs de la période précédente (durée équivalente) pour permettre le calcul de tendances côté frontend.
+
+| Indicateur | Périmètre Commercial | Périmètre Admin |
+|------------|----------------------|-----------------|
+| Chiffre d'affaires (période) | Leads gagnés assignés au commercial | Tous les leads gagnés |
+| Taux de conversion | Leads du commercial (période) | Tous les leads (période) |
+| Pipeline total | Leads actifs du commercial (hors gagné/perdu) | Ensemble du pipeline |
+| Tâches en retard | Tâches assignées au commercial | Tâches assignées au commercial |
+| Tâches urgentes | Priorité haute/urgente du commercial | Tâches du commercial |
+| Nouveaux contacts | Contacts assignés au commercial (période) | Tous les contacts (période) |
+| Total contacts | Contacts assignés au commercial | Tous les contacts |
+| RDV du jour | Tâches type `rendez-vous` du commercial | Tâches du commercial |
+| Leads par statut | Leads du commercial par statut | Tous les leads par statut |
+| Leads par source | Leads du commercial par canal | Tous les leads par canal |
+| Lifetime Value (LTV) | Contacts assignés au commercial | Tous les contacts |
+| Top commerciaux | Non disponible | Classement par CA (période) |
+| Segmentation contacts | Contacts assignés (par secteur/ville) | Tous les contacts (par secteur/ville) |
 
 ---
 
-## 5. Référentiel des endpoints API
+## 7. Référentiel des endpoints API
 
 ### Auth
 
-| Methode | Endpoint | Description | Roles |
+| Méthode | Endpoint | Description | Rôles |
 |---------|----------|-------------|-------|
 | `GET` | `/auth/me` | Profil utilisateur courant | Tous |
-| `POST` | `/auth/logout` | Deconnexion | Tous |
+| `PATCH` | `/auth/me` | Mettre à jour son profil | Tous |
+| `POST` | `/auth/logout` | Déconnexion | Tous |
+| `GET` | `/auth/users` | Lister les utilisateurs | Admin |
+| `POST` | `/auth/invite` | Inviter un utilisateur | Admin |
+| `PATCH` | `/auth/users/:id/role` | Modifier le rôle | Admin |
+| `PATCH` | `/auth/users/:id/active` | Activer/désactiver un compte | Admin |
+| `DELETE` | `/auth/users/:id` | Supprimer un utilisateur | Admin |
 
 ### Contacts
 
-| Methode | Endpoint | Description | Roles |
+| Méthode | Endpoint | Description | Rôles |
 |---------|----------|-------------|-------|
-| `GET` | `/contacts` | Lister (filtres : search, company, page) | Commercial, Admin |
-| `POST` | `/contacts` | Creer un contact | Commercial, Admin |
-| `GET` | `/contacts/:id` | Detail contact | Commercial, Admin |
+| `GET` | `/contacts` | Lister (filtres : search, company, is_subscribed, page) | Commercial, Admin |
+| `POST` | `/contacts` | Créer un contact | Commercial, Admin |
+| `GET` | `/contacts/stats` | Statistiques contacts | Commercial, Admin |
+| `GET` | `/contacts/:id` | Détail contact | Commercial, Admin |
 | `PATCH` | `/contacts/:id` | Modifier un contact | Commercial, Admin |
 | `DELETE` | `/contacts/:id` | Supprimer un contact | Admin |
 | `GET` | `/contacts/:id/communications` | Timeline des interactions | Commercial, Admin |
-| `GET` | `/contacts/:id/leads` | Leads associes | Commercial, Admin |
+| `GET` | `/contacts/:id/leads` | Leads associés | Commercial, Admin |
 
 ### Entreprises
 
-| Methode | Endpoint | Description | Roles |
+| Méthode | Endpoint | Description | Rôles |
 |---------|----------|-------------|-------|
 | `GET` | `/companies` | Lister (filtres : industry, city) | Commercial, Admin |
-| `POST` | `/companies` | Creer une entreprise | Commercial, Admin |
-| `GET` | `/companies/:id` | Detail entreprise | Commercial, Admin |
+| `POST` | `/companies` | Créer une entreprise | Commercial, Admin |
+| `GET` | `/companies/stats` | Statistiques entreprises | Commercial, Admin |
+| `GET` | `/companies/:id` | Détail entreprise + contacts | Commercial, Admin |
 | `PATCH` | `/companies/:id` | Modifier une entreprise | Commercial, Admin |
 | `DELETE` | `/companies/:id` | Supprimer une entreprise | Admin |
-| `GET` | `/companies/:id/contacts` | Contacts lies | Commercial, Admin |
-| `GET` | `/companies/:id/leads` | Leads lies | Commercial, Admin |
+| `GET` | `/companies/:id/contacts` | Contacts liés | Commercial, Admin |
+| `GET` | `/companies/:id/leads` | Leads liés | Commercial, Admin |
 
 ### Leads
 
-| Methode | Endpoint | Description | Roles |
+| Méthode | Endpoint | Description | Rôles |
 |---------|----------|-------------|-------|
 | `GET` | `/leads` | Lister les leads | Commercial (les siens), Admin (tous) |
-| `POST` | `/leads` | Creer un lead (+ deal pipeline) | Commercial, Admin |
-| `GET` | `/leads/:id` | Detail lead | Commercial, Admin |
+| `POST` | `/leads` | Créer un lead (+ deal pipeline) | Commercial, Admin |
+| `GET` | `/leads/stats` | Statistiques leads | Commercial, Admin |
+| `GET` | `/leads/:id` | Détail lead | Commercial, Admin |
 | `PATCH` | `/leads/:id` | Modifier statut / valeur | Commercial, Admin |
 | `DELETE` | `/leads/:id` | Supprimer un lead | Admin |
 | `GET` | `/leads/:id/communications` | Timeline communications | Commercial, Admin |
 
 ### Pipeline
 
-| Methode | Endpoint | Description | Roles |
+| Méthode | Endpoint | Description | Rôles |
 |---------|----------|-------------|-------|
-| `GET` | `/pipeline/stages` | Etapes du Kanban | Commercial, Admin |
-| `GET` | `/pipeline/deals` | Deals par etape | Commercial, Admin |
-| `PATCH` | `/pipeline/deals/:id` | Deplacer un deal | Commercial, Admin |
+| `GET` | `/pipeline/kanban` | Tableau Kanban complet | Commercial, Admin |
+| `GET` | `/pipeline/stats` | Statistiques + revenu pondéré | Commercial, Admin |
+| `POST` | `/pipeline/deals` | Créer un deal | Commercial, Admin |
+| `PATCH` | `/pipeline/deals/:id/move` | Déplacer un deal entre étapes | Commercial, Admin |
 
-### Taches
+### Tâches
 
-| Methode | Endpoint | Description | Roles |
+| Méthode | Endpoint | Description | Rôles |
 |---------|----------|-------------|-------|
-| `GET` | `/tasks` | Lister les taches (filtres : view, month, assigned_to) | Tous |
-| `POST` | `/tasks` | Creer une tache | Commercial, Admin |
-| `PATCH` | `/tasks/:id` | Modifier / marquer terminee | Commercial, Admin |
-| `DELETE` | `/tasks/:id` | Supprimer une tache | Admin |
-| `GET` | `/tasks/kpis` | KPIs (en retard, en cours, terminees) | Tous |
+| `GET` | `/tasks` | Lister (filtres : status, priority, type, overdue, date_from, date_to) | Tous |
+| `POST` | `/tasks` | Créer une tâche | Tous |
+| `GET` | `/tasks/stats` | KPIs (en retard, en cours, terminées) | Tous |
+| `GET` | `/tasks/:id` | Détail tâche | Tous |
+| `PATCH` | `/tasks/:id` | Modifier / marquer terminée | Tous |
+| `DELETE` | `/tasks/:id` | Supprimer une tâche | Tous |
+
+### Notifications
+
+| Méthode | Endpoint | Description | Rôles |
+|---------|----------|-------------|-------|
+| `GET` | `/notifications` | Alertes calculées à la volée | Tous |
+| `PATCH` | `/notifications/:id/read` | Marquer une notification comme lue | Tous |
+| `PATCH` | `/notifications/read-all` | Marquer toutes les notifications comme lues | Tous |
 
 ### Campagnes
 
-| Methode | Endpoint | Description | Roles |
+| Méthode | Endpoint | Description | Rôles |
 |---------|----------|-------------|-------|
-| `GET` | `/campaigns` | Lister les campagnes | Commercial, Admin |
-| `POST` | `/campaigns` | Creer et envoyer une campagne | Admin |
-| `GET` | `/campaigns/:id` | Detail + statistiques | Commercial, Admin |
-| `POST` | `/campaigns/:id/sync` | Synchroniser stats Brevo | Admin |
-| `POST` | `/webhooks/brevo` | Reception webhooks Brevo | Systeme |
-
-### Administration
-
-| Methode | Endpoint | Description | Roles |
-|---------|----------|-------------|-------|
-| `GET` | `/admin/users` | Lister les utilisateurs | Admin |
-| `POST` | `/admin/users/invite` | Inviter un utilisateur | Admin |
-| `PATCH` | `/admin/users/:id` | Modifier role / activation | Admin |
-| `DELETE` | `/admin/users/:id` | Supprimer un utilisateur | Admin |
-| `GET` | `/admin/kpis` | KPIs globaux du dashboard | Admin |
+| `GET` | `/email/campaigns` | Lister les campagnes | Commercial (lecture), Admin |
+| `POST` | `/email/campaigns` | Créer et planifier une campagne | Admin |
+| `PATCH` | `/email/campaigns/:id/sync` | Synchroniser stats Brevo | Admin |
+| `GET` | `/email/campaigns/fix-statuses` | Migration one-shot des statuts | Admin |
+| `POST` | `/webhooks/brevo` | Réception webhooks Brevo | Système |
 
 ### Dashboard
 
-| Methode | Endpoint | Description | Roles |
+| Méthode | Endpoint | Description | Rôles |
 |---------|----------|-------------|-------|
-| `GET` | `/dashboard/kpis` | Metriques agregees (CA, conversion, pipeline…) | Commercial, Admin |
-| `GET` | `/dashboard/activity` | Flux d'activite recent | Commercial, Admin |
+| `GET` | `/dashboard/kpis` | Métriques agrégées (CA, conversion, pipeline, contacts, tâches, agenda) | Commercial, Admin |
+| `GET` | `/dashboard/leads-by-status` | Leads groupés par statut | Commercial, Admin |
+| `GET` | `/dashboard/leads-by-source` | Leads groupés par canal d'acquisition | Commercial, Admin |
+| `GET` | `/dashboard/contacts-by-segment` | Segmentation contacts par secteur/ville | Commercial, Admin |
+| `GET` | `/dashboard/ltv` | Lifetime Value par contact | Commercial, Admin |
+| `GET` | `/dashboard/activity` | Flux d'activité récent | Commercial, Admin |
+| `GET` | `/dashboard/top-commercials` | Classement des commerciaux par CA | Admin |

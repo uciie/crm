@@ -117,7 +117,7 @@ crm/
 ├── frontend/                    # Application Next.js 14
 │   ├── src/
 │   │   ├── app/                 # App Router — pages et layouts
-│   │   │   └── (dashboard)/     # Groupe de routes protégées
+│   │   │   ├── (dashboard)/     # Groupe de routes protégées
 │   │   │       ├── layout.tsx   # Layout global (Header, Sidebar, Auth)
 │   │   │       ├── dashboard/
 │   │   │       ├── contacts/
@@ -125,7 +125,14 @@ crm/
 │   │   │       ├── pipeline/
 │   │   │       ├── leads/
 │   │   │       ├── tasks/
+│   │   │       ├── settings/
+│   │   │       ├── profile/
 │   │   │       └── campaigns/
+│   │   │   └── (auth)/          # Connexion, création de compte, etc.
+│   │   │       ├── forgot-password/
+│   │   │       ├── login/
+│   │   │       ├── register/
+│   │   │       └── update-password/
 │   │   ├── components/          # Composants réutilisables
 │   │   ├── hooks/               # Hooks personnalisés (useAuth, useTasks…)
 │   │   ├── services/            # Couche d'appel API
@@ -287,12 +294,26 @@ BREVO_SENDER_EMAIL=<expediteur@domaine.fr>
 BREVO_SENDER_NAME=CRM
 
 # Templates Brevo (IDs numeriques crees dans l'interface Brevo)
-BREVO_TEMPLATE_WELCOME=<id>
-BREVO_TEMPLATE_LEAD_ASSIGNED=<id>
-BREVO_TEMPLATE_TASK_ASSIGNED=<id>
+BREVO_WELCOME_TEMPLATE_ID=<id>
+BREVO_LEAD_ASSIGNED_TEMPLATE_ID=<id>
+BREVO_TASK_ASSIGNED_TEMPLATE_ID=<id>
+
 BREVO_TEMPLATE_DEAL_STAGE_CHANGED=<id>
 BREVO_TEMPLATE_LEAD_WON=<id>
 BREVO_TEMPLATE_LEAD_LOST=<id>
+
+BREVO_TPL_NEWSLETTER=<id>
+BREVO_TPL_PROMO=<id>
+BREVO_TPL_RELANCE=<id>
+BREVO_TPL_ONBOARDING=<id>
+
+BREVO_LIST_ID=<id-liste-contact>
+BREVO_SENDER_ID=<id-sender>
+BREVO_CAMPAIGN_SENDER_ID=<id-sender-campagne>
+BREVO_SMTP_HOST=smtp-relay.brevo.com
+BREVO_SMTP_PORT=<port.>
+BREVO_SMTP_USER=<id>@smtp-brevo.com
+BREVO_SMTP_PASS=<votre-cle-api-SMTP>
 ```
 
 | Variable | Description | Ou la trouver |

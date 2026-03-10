@@ -1,55 +1,80 @@
+%%{init: {
+  'theme': 'neutral',
+  'themeVariables': {
+    'primaryColor': '#ffffff',
+    'primaryTextColor': '#000000',
+    'primaryBorderColor': '#000000',
+    'lineColor': '#000000',
+    'secondaryColor': '#f4f4f4',
+    'tertiaryColor': '#ffffff',
+    'mainBkg': '#ffffff',
+    'nodeTextColor': '#000000'
+  }
+}}%%
+
 sequenceDiagram
     autonumber
     actor A as 🛡️ Administrateur
     participant FE as 🌐 Next.js Frontend
     participant BE as 🛠️ NestJS Backend
-    participant DB as 🗄️ Supabase DB
-    participant BR as 📧 Brevo API
+    participant DB as 🗄️ PostgreSQL
+    participant BR as 📧 API Brevo
+    participant WH as 🔔 Webhook Brevo
 
-    %% ─── CRÉER UNE CAMPAGNE ──────────────────────────────
-    rect rgb(0, 0, 0)
-        Note over A,BR: ➕ Scénario 1 — Créer et envoyer une campagne
-        A->>FE: Remplit formulaire (sujet, template, liste contacts…)
-        FE->>BE: POST /campaigns { subject, template_id, contact_list_ids }
-        BE->>DB: SELECT contacts WHERE id IN (...) AND is_subscribed = true
-        DB-->>BE: [{ email, first_name, last_name }]
-        BE->>BR: POST /emailCampaigns { name, subject, sender, recipients }
-        BR-->>BE: { id: brevo_campaign_id, status: "draft" }
-        BE->>DB: INSERT INTO email_campaigns (title, brevo_campaign_id, status)
+    rect rgb(255,255,255)
+        Note over A,BR: ➕ Création et envoi d'une campagne
+        A->>FE: Remplit formulaire (nom, sujet, HTML, listes, date planif.)
+        FE->>BE: POST /email/campaigns { name, subject, htmlContent, listIds, scheduledAt? }
+        BE->>BE: Validation : scheduledAt dans le passé → ignoré (statut "brouillon")
+        BE->>BR: POST /emailCampaigns { name, subject, sender, htmlContent, recipients, scheduledAt }
+        BR-->>BE: { id: brevo_campaign_id }
+        BE->>DB: INSERT INTO email_campaigns (name, subject, brevo_campaign_id, status, scheduled_at)
         DB-->>BE: campagne enregistrée
-        BE->>BR: POST /emailCampaigns/:id/sendNow
-        BR-->>BE: { message: "Scheduled" }
-        BE->>DB: UPDATE email_campaigns SET status = "sent", sent_at = NOW()
-        DB-->>BE: OK
         BE-->>FE: 201 { campaign }
-        FE-->>A: Toast "Campagne envoyée"
+        FE-->>A: Toast "Campagne créée"
     end
 
-    %% ─── SYNCHRONISER LES MÉTRIQUES ──────────────────────
-    rect rgb(0, 0, 0)
-        Note over A,BR: 📊 Scénario 2 — Synchroniser les métriques
-        A->>FE: Clique "Actualiser stats" sur une campagne
-        FE->>BE: POST /campaigns/:id/sync
-        BE->>BR: GET /emailCampaigns/:brevo_id (statistics)
-        BR-->>BE: { openRate, clickRate, bounceRate, unsubscribeCount }
-        BE->>DB: UPDATE email_campaigns SET open_rate, click_rate, bounce_rate
-        DB-->>BE: mis à jour
-        BE-->>FE: 200 { stats }
-        FE-->>A: Statistiques mises à jour dans le tableau de bord
-    end
-
-    %% ─── WEBHOOK BREVO ENTRANT ───────────────────────────
-    rect rgb(0, 0, 0)
-        Note over A,BR: 🔔 Scénario 3 — Webhook Brevo (événement entrant)
-        BR->>BE: POST /webhooks/brevo { event: "unsubscribe", email, messageId }
-        Note over BE: Vérifie signature HMAC du webhook
-        BE->>DB: SELECT contacts WHERE email = :email
-        DB-->>BE: { contact_id }
-        BE->>DB: UPDATE contacts SET is_subscribed = false WHERE email = :email
-        DB-->>BE: contact mis à jour
-        alt event == "delivered" ou "opened" ou "clicked"
-            BE->>DB: INSERT INTO communications (type, brevo_message_id, status, contact_id)
-            DB-->>BE: communication enregistrée
+    rect rgb(255,255,255)
+        Note over BE,BR: ⏱️ Synchronisation automatique CRON (toutes les 5 min)
+        BE->>DB: SELECT id, brevo_campaign_id FROM email_campaigns WHERE status = 'planifiée'
+        DB-->>BE: campagnes planifiées
+        loop Pour chaque campagne avec brevo_campaign_id
+            BE->>BR: GET /emailCampaigns/:brevo_id (statistics)
+            BR-->>BE: { status, statistics: { campaignStats[], globalStats } }
+            BE->>BE: Agrégation campaignStats : SUM(delivered, uniqueViews, uniqueClicks, ...)\nMapping statut : 'sent' → 'envoyée', 'scheduled' → 'planifiée'
+            BE->>DB: UPDATE email_campaigns SET sent_count, open_count, click_count,\n open_rate, click_rate, unsubscribe_count, bounce_count, status
+            DB-->>BE: OK
         end
-        BE-->>BR: 200 OK
+    end
+
+    rect rgb(255,255,255)
+        Note over WH,DB: 🔔 Réception webhook Brevo (temps réel)
+        WH->>BE: POST /webhooks/brevo { event, message-id, email, campId? }
+        BE->>BE: Vérification signature x-brevo-signature vs BREVO_WEBHOOK_SECRET
+        alt Signature invalide
+            BE-->>WH: 200 { received: 0 } (requête ignorée)
+        else Signature valide
+            alt event = "opened" | "click"
+                BE->>DB: UPDATE email_campaigns SET open_count+1 / click_count+1,\n recalcul open_rate / click_rate WHERE brevo_campaign_id = campId
+            else event = "hard_bounce"
+                BE->>DB: UPDATE email_campaigns SET bounce_count+1
+            else event = "unsubscribe"
+                BE->>DB: UPDATE contacts SET is_subscribed = false WHERE email = :email
+                BE->>DB: UPDATE email_campaigns SET unsubscribe_count+1
+            else event = "delivered" | "soft_bounce" | "blocked"
+                BE->>DB: UPDATE communications SET status = :mappedStatus\n WHERE brevo_message_id = message-id
+            end
+            BE-->>WH: 200 { received: 1 }
+        end
+    end
+
+    rect rgb(255,255,255)
+        Note over A,DB: 💰 Calcul du ROI
+        A->>FE: Saisit coût et revenus générés de la campagne
+        FE->>BE: PATCH /email/campaigns/:id (cost, revenue_generated)
+        BE->>DB: UPDATE email_campaigns SET cost, revenue_generated
+        BE->>BE: ROI = (revenue - cost) / cost * 100
+        BE->>DB: UPDATE email_campaigns SET roi = :calculatedRoi
+        BE-->>FE: { cost, revenue, roi }
+        FE-->>A: ROI affiché sur la fiche campagne
     end
