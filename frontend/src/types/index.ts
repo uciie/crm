@@ -336,6 +336,7 @@ export interface EmailCampaign {
   bounce_count?:      number
   conversion_count?:  number
   roi?:               number | null  // null = coût non renseigné
+  html_content?: string
 }
 
 // ── Pagination et filtres ─────────────────────────────────────

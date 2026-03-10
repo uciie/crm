@@ -479,6 +479,7 @@ export class EmailService implements OnModuleInit {
         const result      = await this.brevo.emailCampaigns.getEmailCampaign({
           campaignId: campaign.brevo_campaign_id,
         })
+        const htmlContent = (result as any).htmlContent as string | undefined
         const statistics  = (result as any).statistics ?? {}
         const brevoStatus = String((result as any).status ?? '')
         const mappedStatus = mapBrevoStatus(brevoStatus, campaign.status)
@@ -521,6 +522,7 @@ export class EmailService implements OnModuleInit {
             unsubscribe_count: unsubCount,
             bounce_count:      bounceCount,
             status:            mappedStatus as CampaignStatus,
+            html_content:       htmlContent ?? campaign.html_content, // Ne pas écraser si Brevo ne retourne pas le contenu
             updated_at:        new Date(),
           })
           .where(eq(emailCampaigns.id, campaignId))

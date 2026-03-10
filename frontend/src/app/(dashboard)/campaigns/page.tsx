@@ -22,7 +22,39 @@ import { formatDate }         from '@/lib/utils'
 import { CampaignModal }      from '@/components/campaigns/CampaignModal'
 import type { EmailCampaign } from '@/types'
 import { calculateRoi }       from '@/lib/utils'
+import {
+  HTML_LANCEMENT_Q1,
+  HTML_NEWSLETTER_MARS,
+  HTML_RELANCE_INACTIFS,
+  HTML_PROMO_PRINTEMPS,
+  HTML_ONBOARDING,
+} from './campaign-templates'
 
+// ── Correspondance nom de campagne → template HTML local ─────
+// Permet d'afficher les aperçus même si htmlContent n'est pas
+// stocké en base. La clé est un fragment du nom de campagne
+// (insensible à la casse).
+const TEMPLATE_MATCHERS: Array<{ keywords: string[]; html: string }> = [
+  { keywords: ['lancement', 'q1', 'launch'],       html: HTML_LANCEMENT_Q1      },
+  { keywords: ['newsletter', 'mars', 'march'],      html: HTML_NEWSLETTER_MARS   },
+  { keywords: ['relance', 'inactif', 'reactivat'],  html: HTML_RELANCE_INACTIFS  },
+  { keywords: ['printemps', 'spring', 'promo'],     html: HTML_PROMO_PRINTEMPS   },
+  { keywords: ['onboarding', 'bienvenue', 'welcome'], html: HTML_ONBOARDING      },
+]
+
+function resolveHtmlContent(campaign: EmailCampaign & { htmlContent?: string }): string | undefined {
+  // 1. Priorité au htmlContent déjà présent (ex: campagne fraîchement créée)
+  if (campaign.htmlContent) return campaign.htmlContent
+
+  // 2. Matching par mots-clés sur le nom de la campagne
+  const nameLower = campaign.name.toLowerCase()
+  for (const matcher of TEMPLATE_MATCHERS) {
+    if (matcher.keywords.some(kw => nameLower.includes(kw))) {
+      return matcher.html
+    }
+  }
+  return undefined
+}
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -97,6 +129,8 @@ function HtmlPreviewModal({
   campaign: EmailCampaign & { htmlContent?: string }
   onClose:  () => void
 }) {
+  const html = resolveHtmlContent(campaign)
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -146,9 +180,9 @@ function HtmlPreviewModal({
 
         {/* iFrame rendu HTML */}
         <div className="flex-1 overflow-hidden bg-gray-100">
-          {campaign.htmlContent ? (
+          {html ? (
             <iframe
-              srcDoc={campaign.htmlContent}
+              srcDoc={html}
               title={`Prévisualisation : ${campaign.name}`}
               className="w-full h-full border-0"
               style={{ minHeight: '480px' }}
@@ -203,6 +237,12 @@ export default function CampaignsPage() {
       setSyncing(false)
     }
   }
+
+  // Campagnes enrichies avec htmlContent résolu (local ou via matching)
+  const campaignsWithHtml = useMemo(() =>
+    campaigns.map(c => ({ ...c, resolvedHtml: resolveHtmlContent(c) })),
+    [campaigns]
+  )
 
   const perfChartData = useMemo(() =>
     campaigns
@@ -319,7 +359,7 @@ export default function CampaignsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {campaigns.map(c => {
+                  {campaignsWithHtml.map(c => {
                     const scfg = STATUS_CFG[c.status as keyof typeof STATUS_CFG] ?? STATUS_CFG.brouillon
                     const roi  = c.roi ?? calculateRoi(c.cost, c.revenue_generated)
                     return (
@@ -352,9 +392,9 @@ export default function CampaignsPage() {
                         <td className="px-4 py-3.5 text-sm text-gray-500">
                           {formatDate(c.scheduled_at ?? c.sent_at)}
                         </td>
-                        {/* Bouton prévisualisation */}
+                        {/* Bouton prévisualisation — visible si un template est résolu */}
                         <td className="px-3 py-3.5">
-                          {c.htmlContent && (
+                          {c.resolvedHtml && (
                             <button
                               onClick={() => setPreview(c)}
                               title="Prévisualiser le HTML"
@@ -452,43 +492,82 @@ export default function CampaignsPage() {
                 )}
               </div>
 
-              {/* Grille aperçus HTML en mode graphiques */}
+              {/* ── Aperçus des contenus email ─────────────────── */}
               <div className="xl:col-span-2">
                 <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-slate-500 mb-3">
                   Aperçus des contenus email
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {campaigns.filter(c => c.htmlContent).map(c => (
-                    <button
-                      key={c.id}
-                      onClick={() => setPreview(c)}
-                      className="group relative bg-white border border-gray-200 rounded-xl overflow-hidden text-left hover:border-blue-400 hover:shadow-lg transition-all"
-                    >
-                      {/* Mini iframe non-interactive */}
-                      <div className="w-full h-40 overflow-hidden pointer-events-none">
-                        <iframe
-                          srcDoc={c.htmlContent}
-                          title={c.name}
-                          className="w-full border-0 origin-top-left"
-                          style={{ transform: 'scale(0.45)', width: '222%', height: '222%', pointerEvents: 'none' }}
-                          sandbox="allow-same-origin"
-                          tabIndex={-1}
-                        />
-                      </div>
-                      {/* Overlay au hover */}
-                      <div className="absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                        <span className="flex items-center gap-1.5 bg-white/95 text-blue-600 text-xs font-bold px-3 py-1.5 rounded-full shadow">
-                          <Eye className="w-3.5 h-3.5" /> Agrandir
-                        </span>
-                      </div>
-                      {/* Label */}
-                      <div className="px-3 py-2.5 border-t border-gray-100">
-                        <p className="text-xs font-bold text-gray-800 truncate">{c.name}</p>
-                        <p className="text-[10px] text-gray-400 truncate mt-0.5">{c.subject}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                {campaignsWithHtml.filter(c => c.resolvedHtml).length === 0 ? (
+                  <div className="flex items-center justify-center py-10 text-xs text-slate-600 border border-dashed border-slate-800 rounded-lg">
+                    Aucun contenu HTML disponible pour les campagnes actuelles
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+                    {campaignsWithHtml.filter(c => c.resolvedHtml).map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => setPreview(c)}
+                        className="group relative bg-white border border-gray-200 rounded-xl overflow-hidden text-left hover:border-blue-400 hover:shadow-lg transition-all"
+                      >
+                        {/* Badge statut */}
+                        <div className="absolute top-2 right-2 z-10">
+                          <span
+                            className="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
+                            style={{
+                              background: STATUS_CFG[c.status as keyof typeof STATUS_CFG]?.bg ?? '#f8fafc',
+                              color:      STATUS_CFG[c.status as keyof typeof STATUS_CFG]?.color ?? '#94a3b8',
+                              border:     `1px solid ${STATUS_CFG[c.status as keyof typeof STATUS_CFG]?.color ?? '#94a3b8'}40`,
+                            }}
+                          >
+                            {STATUS_CFG[c.status as keyof typeof STATUS_CFG]?.label ?? c.status}
+                          </span>
+                        </div>
+
+                        {/* Mini iframe non-interactive */}
+                        <div className="w-full h-40 overflow-hidden pointer-events-none bg-gray-50">
+                          <iframe
+                            srcDoc={c.resolvedHtml}
+                            title={c.name}
+                            className="w-full border-0 origin-top-left"
+                            style={{ transform: 'scale(0.45)', width: '222%', height: '222%', pointerEvents: 'none' }}
+                            sandbox="allow-same-origin"
+                            tabIndex={-1}
+                          />
+                        </div>
+
+                        {/* Overlay au hover */}
+                        <div className="absolute inset-0 bg-blue-600/0 group-hover:bg-blue-600/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                          <span className="flex items-center gap-1.5 bg-white/95 text-blue-600 text-xs font-bold px-3 py-1.5 rounded-full shadow">
+                            <Eye className="w-3.5 h-3.5" /> Agrandir
+                          </span>
+                        </div>
+
+                        {/* Label + stats inline */}
+                        <div className="px-3 py-2.5 border-t border-gray-100">
+                          <p className="text-xs font-bold text-gray-800 truncate">{c.name}</p>
+                          <p className="text-[10px] text-gray-400 truncate mt-0.5">{c.subject}</p>
+                          {c.status === 'envoyée' && c.sent_count > 0 && (
+                            <div className="flex items-center gap-3 mt-1.5">
+                              <span className="text-[10px] text-gray-500 tabular-nums">
+                                {c.sent_count.toLocaleString('fr-FR')} envois
+                              </span>
+                              {c.open_rate != null && (
+                                <span className="text-[10px] font-semibold text-blue-500">
+                                  {c.open_rate}% ouv.
+                                </span>
+                              )}
+                              {c.click_rate != null && (
+                                <span className="text-[10px] font-semibold text-emerald-500">
+                                  {c.click_rate}% clic
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
             </div>

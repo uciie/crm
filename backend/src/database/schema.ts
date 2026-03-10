@@ -198,6 +198,7 @@ export const emailCampaigns = pgTable('email_campaigns', {
   roi: decimal('roi', { precision: 8, scale: 2 }),
   // Stocké après calcul : (revenue - cost) / cost * 100
   // null = pas encore calculé
+  html_content: text('html_content'),
 })
 
 // Types inférés pour TypeScript
