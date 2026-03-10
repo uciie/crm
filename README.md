@@ -19,8 +19,9 @@
 5. [Sécurité et middleware](#5-sécurité-et-middleware)
 6. [Installation et lancement](#6-installation-et-lancement)
 7. [Variables d'environnement](#7-variables-denvironnement)
-8. [CI/CD et déploiement](#8-cicd-et-déploiement)
-9. [Documentation technique](#9-documentation-technique)
+8. [Tests unitaires](#8-tests)
+9. [CI/CD et déploiement](#9-cicd-et-déploiement)
+10. [Documentation technique](#10-documentation-technique)
 
 ---
 
@@ -350,10 +351,10 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 
 Les tests unitaires couvrent la couche **service** du backend (logique métier, contrôle d'accès, triggers email). Ils utilisent **Jest** avec des mocks complets de la base de données et de l'`EmailService`, garantissant une exécution rapide et sans dépendance réseau.
 
-### Lancer les tests
+### Lancer les tests au backend ou frontend
 
 ```bash
-cd backend
+cd backend # ou cd frontend
 
 # Tous les tests
 npm run test
@@ -370,6 +371,9 @@ backend/src/
 │   └── leads.service.spec.ts      # cas — LeadsService
 └── pipeline/
     └── pipeline.service.spec.ts   # cas — PipelineService
+frontend/src/components/
+└── auth /
+    └── AuthGuard.test.tsx
 ```
 
 ### Configuration Jest (`jest.config.ts`)
@@ -438,7 +442,7 @@ docs/sequences/*.mermaid  ->  docs/sequences/*.png
 
 ---
 
-## 9. Documentation technique
+## 10. Documentation technique
 
 La documentation technique détaillée est disponible dans [`docs/doc_technique.md`](docs/doc_technique.md).
 
