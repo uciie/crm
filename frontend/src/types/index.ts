@@ -324,6 +324,8 @@ export interface EmailCampaign {
   sent_count:          number
   open_rate?:          number
   click_rate?:         number
+  open_count?:         number   // compteur brut ouvertures (incrémenté par webhook)
+  click_count?:        number   // compteur brut clics (incrémenté par webhook)
   scheduled_at?:       string
   sent_at?:            string
   created_at:          string

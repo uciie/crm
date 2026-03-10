@@ -23,6 +23,7 @@ export const industryEnum = pgEnum('industry_type', [
   'Medias', 
   'Autre'
 ])
+export const campaignStatusEnum = pgEnum('campaign_status', ['brouillon', 'planifiée', 'envoyée'])
 
 // Table profiles
 export const profiles = pgTable('profiles', {
@@ -165,10 +166,12 @@ export const emailCampaigns = pgTable('email_campaigns', {
   name:               varchar('name',    { length: 255 }).notNull(),
   subject:            varchar('subject', { length: 255 }).notNull(),
   brevo_campaign_id:  integer('brevo_campaign_id'),
-  status:             varchar('status', { length: 50 }).default('brouillon'),
+  status: campaignStatusEnum('status').notNull().default('brouillon'),
   sent_count:         integer('sent_count').default(0),
   open_rate:          decimal('open_rate',  { precision: 5, scale: 2 }),
   click_rate:         decimal('click_rate', { precision: 5, scale: 2 }),
+  open_count:  integer('open_count').default(0),
+  click_count: integer('click_count').default(0),
   scheduled_at:       timestamp('scheduled_at', { withTimezone: true }),
   sent_at:            timestamp('sent_at',       { withTimezone: true }),
   created_by:         uuid('created_by').references(() => profiles.id),
@@ -209,3 +212,4 @@ export type PipelineDeal  = typeof pipelineDeals.$inferSelect
 export type TaskType = typeof taskTypeEnum.enumValues[number];
 export type TaskStatus = typeof taskStatusEnum.enumValues[number];
 export type TaskPriority = typeof taskPriorityEnum.enumValues[number];
+export type CampaignStatus = 'brouillon' | 'planifiée' | 'envoyée'

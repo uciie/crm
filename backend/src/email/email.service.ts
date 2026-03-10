@@ -5,11 +5,12 @@
 // ============================================================
 
 import { Injectable, Logger, OnModuleInit, NotFoundException } from '@nestjs/common'
+import { Cron, CronExpression } from '@nestjs/schedule'
 import { Resend }                from 'resend'
 import { BrevoClient, Brevo }    from '@getbrevo/brevo'   // ← nouvelle API
 import { db }                    from '../database/db.config'
 import { emailCampaigns, communications, profiles } from '../database/schema'
-import { eq }                    from 'drizzle-orm'
+import { eq, lte, inArray }      from 'drizzle-orm'
 import {
   TEMPLATES,
   validateTemplates,
@@ -17,6 +18,7 @@ import {
   type TemplatePayload,
 } from './templates.config'
 import * as nodemailer from 'nodemailer'
+import {CampaignStatus } from '../database/schema'
 
 export interface EmailRecipient {
   email: string
@@ -30,6 +32,25 @@ export interface TransactionalEmailOptions {
   contactId?:  string
   leadId?:     string
   createdBy?:  string
+}
+
+
+// ── Helper : mapping statut Brevo (EN) → CRM (FR) ────────────
+// Centralisé ici pour être utilisé par syncCampaignStats ET
+// le endpoint de migration one-shot.
+export const BREVO_STATUS_MAP: Record<string, string> = {
+  sent:       'envoyée',
+  queued:     'planifiée',
+  scheduled:  'planifiée',
+  draft:      'brouillon',
+  archive:    'envoyée',
+  test:       'brouillon',
+  suspended:  'brouillon',
+  in_process: 'envoyée',
+}
+
+export function mapBrevoStatus(brevoStatus: string, fallback: string): string {
+  return BREVO_STATUS_MAP[String(brevoStatus).toLowerCase()] ?? fallback
 }
 
 @Injectable()
@@ -183,7 +204,7 @@ export class EmailService implements OnModuleInit {
         await this.brevo.transactionalEmails.sendTransacEmail({
           to: [{ email: payload.recipientEmail, name: payload.recipientName }],
           sender: { id: Number(process.env.BREVO_SENDER_ID) },
-          templateId: Number(process.env.BREVO_WELCOME_TEMPLATE_ID ?? 9),
+          templateId: Number(process.env.BREVO_WELCOME_TEMPLATE_ID ?? 2),
           params: {
             FULL_NAME: payload.recipientName,
             ROLE:      payload.role,
@@ -390,20 +411,37 @@ export class EmailService implements OnModuleInit {
     scheduledAt?: Date
     createdBy:    string
   }) {
+    // Guard : Brevo refuse toute date planifiée dans le passé
+    if (data.scheduledAt && data.scheduledAt <= new Date()) {
+      this.logger.warn(`⚠️ scheduledAt "${data.scheduledAt.toISOString()}" est dans le passé — ignoré, campagne créée en brouillon`)
+      data.scheduledAt = undefined
+    }
+
     let brevoCampaignId: number | undefined
+    console.log('createCampaign data:', {
+      name: data.name,
+      subject: data.subject,
+      htmlContent: data.htmlContent ? '[HTML CONTENT]' : 'MISSING',
+      listIds: data.listIds,
+      scheduledAt: data.scheduledAt?.toISOString() ?? 'N/A',
+    })
 
     if (this.brevo) {
       try {
+        const senderId = Number(process.env.BREVO_CAMPAIGN_SENDER_ID ?? process.env.BREVO_SENDER_ID)
+        console.log('Using senderId:', senderId)
+        if (!senderId || isNaN(senderId)) {
+          this.logger.error('❌ BREVO_SENDER_ID manquant ou invalide — campagne impossible')
+          throw new Error('BREVO_SENDER_ID non configuré')
+        }
+
         const result = await this.brevo.emailCampaigns.createEmailCampaign({
           name:        data.name,
           subject:     data.subject,
-          sender: {
-            name:  process.env.BREVO_SENDER_NAME  ?? 'CRM',
-            email: process.env.BREVO_SENDER_EMAIL ?? '',
-          },
-          htmlContent:  data.htmlContent,
-          recipients:   { listIds: data.listIds },
-          scheduledAt:  data.scheduledAt?.toISOString(),
+          sender:      { id: senderId },
+          htmlContent: data.htmlContent,
+          recipients:  { listIds: data.listIds },
+          scheduledAt: data.scheduledAt?.toISOString(),
         })
         brevoCampaignId = result.id
         this.logger.log(`✅ Campagne Brevo créée — id=${brevoCampaignId}`)
@@ -441,26 +479,34 @@ export class EmailService implements OnModuleInit {
         const result = await this.brevo.emailCampaigns.getEmailCampaign({
           campaignId: campaign.brevo_campaign_id,  // ← objet { campaignId }
         })
-        const stats = (result as any).statistics?.globalStats
+        const stats      = (result as any).statistics?.globalStats
+        const brevoStatus = String((result as any).status ?? '')
+        const mappedStatus = mapBrevoStatus(brevoStatus, campaign.status)
+
+        this.logger.log(`   sync: brevo_status="${brevoStatus}" → mapped="${mappedStatus}"`)
+
+        const sentCount  = stats?.sent         ?? 0
+        const openCount  = stats?.uniqueOpens  ?? 0
+        const clickCount = stats?.uniqueClicks ?? 0
+        const openRate   = sentCount > 0 ? ((openCount  / sentCount) * 100).toFixed(2) : '0'
+        const clickRate  = sentCount > 0 ? ((clickCount / sentCount) * 100).toFixed(2) : '0'
 
         await db
           .update(emailCampaigns)
           .set({
-            sent_count:        stats?.sent ?? 0,
-            open_rate:         stats?.uniqueOpens && stats?.sent
-              ? String(((stats.uniqueOpens / stats.sent) * 100).toFixed(2))
-              : '0',
-            click_rate:        stats?.uniqueClicks && stats?.sent
-              ? String(((stats.uniqueClicks / stats.sent) * 100).toFixed(2))
-              : '0',
+            sent_count:        sentCount,
+            open_count:        openCount,
+            click_count:       clickCount,
+            open_rate:         openRate,
+            click_rate:        clickRate,
             unsubscribe_count: stats?.unsubscribed ?? 0,
             bounce_count:      stats?.hardBounces  ?? 0,
-            status:            (result as any).status ?? campaign.status,
+            status:            mappedStatus as CampaignStatus,
             updated_at:        new Date(),
           })
           .where(eq(emailCampaigns.id, campaignId))
 
-        this.logger.log(`✅ Stats campagne ${campaignId} synchronisées`)
+        this.logger.log(`✅ Stats campagne ${campaignId} synchronisées — status="${mappedStatus}" open=${openRate}% click=${clickRate}%`)
       } catch (err: any) {
         this.logger.error(`❌ syncCampaignStats: ${err?.message}`)
       }
@@ -583,4 +629,77 @@ export class EmailService implements OnModuleInit {
       this.logger.error(`logCommunication: ${err?.message}`)
     }
   }
+
+  // ═══════════════════════════════════════════════════════════
+  // CRON — Sync automatique des campagnes planifiées
+  // Tourne toutes les 5 minutes.
+  // Détecte les campagnes dont scheduled_at est passé et
+  // synchronise leur statut depuis Brevo.
+  // ═══════════════════════════════════════════════════════════
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async autosyncScheduledCampaigns(): Promise<void> {
+    const now = new Date()
+
+    // Récupère toutes les campagnes "planifiée" dont l'heure est passée
+    const due = await db
+      .select({ id: emailCampaigns.id, brevo_campaign_id: emailCampaigns.brevo_campaign_id })
+      .from(emailCampaigns)
+      .where(
+        inArray(emailCampaigns.status, ['planifiée'])
+      )
+
+    const overdue = due.filter(c => {
+      // On sync uniquement celles qui ont un brevo_campaign_id
+      return !!c.brevo_campaign_id
+    })
+
+    if (overdue.length === 0) return
+
+    this.logger.log(`⏱  autosync — ${overdue.length} campagne(s) planifiée(s) à vérifier`)
+
+    let synced = 0
+    let failed = 0
+
+    for (const c of overdue) {
+      try {
+        await this.syncCampaignStats(c.id)
+        synced++
+      } catch (err: any) {
+        this.logger.error(`❌ autosync échoué pour ${c.id}: ${err?.message}`)
+        failed++
+      }
+    }
+
+    this.logger.log(`✅ autosync terminé — ${synced} sync, ${failed} erreurs`)
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // MIGRATION ONE-SHOT
+  // Corrige les statuts Brevo (EN) déjà en DB vers le format CRM (FR).
+  // Appeler via GET /email/campaigns/fix-statuses (admin only).
+  // Peut être supprimé une fois exécuté.
+  // ═══════════════════════════════════════════════════════════
+
+  async fixLegacyStatuses(): Promise<{ updated: number }> {
+    const all = await db
+      .select({ id: emailCampaigns.id, status: emailCampaigns.status })
+      .from(emailCampaigns)
+
+    let updated = 0
+    for (const c of all) {
+      const mapped = mapBrevoStatus(c.status ?? '', '')
+      if (mapped && mapped !== c.status) {
+        await db
+          .update(emailCampaigns)
+          .set({ status: mapped as CampaignStatus , updated_at: new Date() })
+          .where(eq(emailCampaigns.id, c.id))
+        this.logger.log(`fix-statuses: ${c.id} "${c.status}" → "${mapped}"`)
+        updated++
+      }
+    }
+    this.logger.log(`✅ fix-statuses terminé — ${updated} campagne(s) corrigée(s)`)
+    return { updated }
+  }
+
 }

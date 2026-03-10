@@ -1,6 +1,6 @@
 // ============================================================
 // email/email.controller.ts
-// REST endpoints for email campaigns
+// REST endpoints pour les campagnes email
 // ============================================================
 
 import {
@@ -14,6 +14,7 @@ import { EmailService }          from './email.service'
 import { db }                    from '../database/db.config'
 import { emailCampaigns }        from '../database/schema'
 import { desc }                  from 'drizzle-orm'
+import { mapBrevoStatus }        from './email.service'
 
 @Controller('email')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -22,7 +23,7 @@ export class EmailController {
 
   /**
    * GET /email/campaigns
-   * Returns all campaigns ordered newest-first.
+   * Retourne toutes les campagnes, statut mappé FR à la volée.
    */
   @Get('campaigns')
   async listCampaigns() {
@@ -31,13 +32,16 @@ export class EmailController {
       .from(emailCampaigns)
       .orderBy(desc(emailCampaigns.created_at))
 
-    return rows
+    // Normalise les statuts anglais (hérités de Brevo) vers le format CRM FR
+    return rows.map(c => ({
+      ...c,
+      status: mapBrevoStatus(c.status ?? '', c.status ?? 'brouillon'),
+    }))
   }
 
   /**
    * POST /email/campaigns
-   * Creates a new Brevo campaign and stores it locally.
-   * Body: { name, subject, htmlContent, listIds, scheduledAt? }
+   * Crée une nouvelle campagne Brevo et la stocke localement.
    */
   @Post('campaigns')
   @Roles('admin', 'commercial')
@@ -63,12 +67,23 @@ export class EmailController {
 
   /**
    * PATCH /email/campaigns/:id/sync
-   * Pulls live stats from Brevo for a single campaign.
+   * Tire les stats live depuis Brevo pour une campagne.
    */
   @Patch('campaigns/:id/sync')
   @Roles('admin')
   @HttpCode(HttpStatus.OK)
   async syncCampaign(@Param('id', ParseUUIDPipe) id: string) {
     return this.emailService.syncCampaignStats(id)
+  }
+
+  /**
+   * GET /email/campaigns/fix-statuses
+   * Migration one-shot : corrige tous les statuts EN → FR en DB.
+   * Admin uniquement. Peut être retiré une fois exécuté.
+   */
+  @Get('campaigns/fix-statuses')
+  @Roles('admin')
+  async fixStatuses() {
+    return this.emailService.fixLegacyStatuses()
   }
 }
