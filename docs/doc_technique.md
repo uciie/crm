@@ -117,15 +117,6 @@ Le système distingue quatre acteurs principaux aux périmètres d'accès diffé
 
 ![Cas d'utilisation — Accès](use_cases/acces.png)
 
-**Lacune identifiée et correction :** Les diagrammes originaux ne modélisaient pas les scénarios d'échec. Il est recommandé d'ajouter un cas d'utilisation `Gérer l'erreur d'authentification` en **extension** des cas `Se connecter` et `Vérifier JWT / Session`, avec des spécialisations pour les sous-types d'erreurs suivants :
-
-- `Token JWT expiré` → message "Session expirée. Veuillez vous reconnecter."
-- `Token absent` → message "Authentification requise."
-- `Token invalide` → message "Token invalide ou expiré."
-- `Compte désactivé` → message "Compte désactivé. Contactez votre administrateur." (vérifié via `is_active = false` dans `JwtStrategy.validate()`)
-
-Ces distinctions sont déjà implémentées dans `JwtAuthGuard` et `JwtStrategy` ; la modélisation UML doit les refléter.
-
 ---
 
 ### 4.3 Module Contacts
@@ -161,18 +152,6 @@ Ces distinctions sont déjà implémentées dans `JwtAuthGuard` et `JwtStrategy`
 ### 4.8 Module Campagnes Email
 
 ![Cas d'utilisation — Campagnes Email](use_cases/campagne_email.png)
-
-**Lacune identifiée et correction :** Le cas d'utilisation `Recevoir un webhook Brevo` est présenté comme un cas unique. Il doit être décomposé en cas **étendus** selon le type d'événement, conformément à l'implémentation effective de `WebhooksController` :
-
-| Événement Brevo | Cas d'utilisation étendu |
-|-----------------|--------------------------|
-| `delivered`, `opened`, `clicked` | `Mettre à jour le statut de livraison` |
-| `soft_bounce`, `hard_bounce` | `Gérer un rebond` (+ stockage `delivery_error`) |
-| `unsubscribe` | `Désabonner un contact` (mise à jour `is_subscribed = false`) |
-| `blocked` | `Bloquer l'envoi` (+ stockage `delivery_error`) |
-| `request`, `deferred`, `spam` | `Horodater l'événement` (mise à jour `updated_at`) |
-
-**Lacune supplémentaire :** Le calcul du ROI (méthode `calculateAndSaveRoi()`) déclenché automatiquement lors de la mise à jour des données financières d'une campagne devrait être modélisé comme un acteur système secondaire (`Système CRM`) interagissant avec un cas d'utilisation `Calculer le ROI de la campagne`.
 
 ---
 

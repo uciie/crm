@@ -345,7 +345,53 @@ NEXT_PUBLIC_API_URL=http://localhost:3001
 
 ---
 
-## 8. CI/CD et déploiement
+## 8. Tests
+
+Les tests unitaires couvrent la couche **service** du backend (logique métier, contrôle d'accès, triggers email). Ils utilisent **Jest** avec des mocks complets de la base de données et de l'`EmailService`, garantissant une exécution rapide et sans dépendance réseau.
+
+### Lancer les tests
+
+```bash
+cd backend
+
+# Tous les tests
+npm run test
+
+# Un seul fichier
+npm run test -- leads.service.spec
+```
+
+### Exemple de fichiers de tests
+
+```
+backend/src/
+├── leads/
+│   └── leads.service.spec.ts      # cas — LeadsService
+└── pipeline/
+    └── pipeline.service.spec.ts   # cas — PipelineService
+```
+
+### Configuration Jest (`jest.config.ts`)
+
+```typescript
+export default {
+  moduleFileExtensions: ['js', 'json', 'ts'],
+  rootDir:              'src',
+  testRegex:            '.*\\.spec\\.ts$',
+  transform:            { '^.+\\.(t|j)s$': 'ts-jest' },
+  collectCoverageFrom:  ['**/*.(t|j)s'],
+  coverageDirectory:    '../coverage',
+  testEnvironment:      'node',
+}
+```
+
+### Stratégie de mock
+
+La base de données (`db`) est entièrement mockée via `jest.mock()` — aucune connexion réelle à Supabase n'est établie lors des tests. L'`EmailService` est mocké séparément pour vérifier les triggers Brevo sans appel réseau. Les emails fire-and-forget (non bloquants) sont validés via `setImmediate()`.
+
+---
+
+## 9. CI/CD et déploiement
 
 ### Workflow de déploiement continu
 
