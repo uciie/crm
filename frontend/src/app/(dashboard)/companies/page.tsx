@@ -1,41 +1,27 @@
 'use client'
 // ============================================================
 // app/(dashboard)/companies/page.tsx
-// Module de gestion des entreprises
+// MODIFIÉ : pagination locale limitée à 5 éléments par page
 // ============================================================
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter }     from 'next/navigation'
 import {
-  Building2,
-  Search,
-  Plus,
-  MapPin,
-  Users,
-  TrendingUp,
-  ChevronLeft,
-  ChevronRight,
-  Pencil,
-  Trash2,
-  Loader2,
-  Factory,
-  BarChart3,
-  DollarSign,
-  ChevronDown,
-  ArrowUpRight,
+  Building2, Search, Plus, MapPin, Users, TrendingUp,
+  Pencil, Trash2, Loader2, Factory, BarChart3,
+  DollarSign, ChevronDown, ArrowUpRight,
 } from 'lucide-react'
 import { companiesService } from '@/services/companies.service'
 import { useToast }         from '@/hooks/useToast'
 import { useAuth }          from '@/hooks/useAuth'
 import { TableSkeleton, StatCardSkeleton } from '@/components/ui/Skeleton'
 import { CompanyModal }     from '@/components/companies/CompanyModal'
+import { Pagination }       from '@/components/ui/Pagination'          // ← nouveau
+import { usePagination }    from '@/hooks/usePagination'               // ← nouveau
 import { cn }               from '@/lib/utils'
-import type {
-  Company,
-  Pagination,
-} from '@/types/crm.types'
+import type { Company, Pagination as PaginationType } from '@/types/crm.types'
 
-// ── Constantes ────────────────────────────────────────────────
+const PAGE_SIZE = 5   // ← limite globale
 
 const INDUSTRY_OPTIONS = [
   'Technologie', 'Finance', 'Sante', 'Commerce de detail',
@@ -43,47 +29,28 @@ const INDUSTRY_OPTIONS = [
 ]
 
 // ── Tooltip ───────────────────────────────────────────────────
-
-interface TooltipProps {
-  label:     string
-  children:  React.ReactNode
-  position?: 'top' | 'bottom'
-}
-
-function Tooltip({ label, children, position = 'top' }: TooltipProps) {
+function Tooltip({ label, children, position = 'top' }: {
+  label: string; children: React.ReactNode; position?: 'top' | 'bottom'
+}) {
   return (
     <div className="relative group/tip inline-flex">
       {children}
-      <div
-        className={[
-          'pointer-events-none absolute left-1/2 -translate-x-1/2 z-50',
-          'opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 delay-100',
-          position === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
-        ].join(' ')}
-      >
-        <div className="bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-bold tracking-[0.15em] uppercase px-2.5 py-1.5 whitespace-nowrap shadow-xl shadow-black/40">
+      <div className={[
+        'pointer-events-none absolute left-1/2 -translate-x-1/2 z-50',
+        'opacity-0 group-hover/tip:opacity-100 transition-opacity duration-150 delay-100',
+        position === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
+      ].join(' ')}>
+        <div className="bg-slate-800 border border-slate-700 text-slate-200 text-[10px] font-bold tracking-[0.15em] uppercase px-2.5 py-1.5 whitespace-nowrap shadow-xl">
           {label}
         </div>
-        {position === 'top' ? (
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-700" />
-        ) : (
-          <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-slate-700" />
-        )}
       </div>
     </div>
   )
 }
 
 // ── Stat card ─────────────────────────────────────────────────
-
-function StatCard({
-  icon: Icon, label, value, sub, loading,
-}: {
-  icon:    React.ElementType
-  label:   string
-  value:   string | number
-  sub?:    string
-  loading: boolean
+function StatCard({ icon: Icon, label, value, sub, loading }: {
+  icon: React.ElementType; label: string; value: string | number; sub?: string; loading: boolean
 }) {
   if (loading) return <StatCardSkeleton />
   return (
@@ -95,79 +62,67 @@ function StatCard({
           {sub && <p className="text-xs text-slate-600 mt-1">{sub}</p>}
         </div>
         <div className="w-9 h-9 border border-slate-800 flex items-center justify-center shrink-0">
-          <Icon className="w-4 h-4 text-slate-600" aria-hidden="true" />
+          <Icon className="w-4 h-4 text-slate-600" />
         </div>
       </div>
     </div>
   )
 }
 
-// ── Logo entreprise ───────────────────────────────────────────
-
 function CompanyLogo({ company }: { company: Company }) {
   if (company.logo_url) {
-    return (
-      <img
-        src={company.logo_url}
-        alt={`Logo ${company.name}`}
-        className="w-9 h-9 object-contain rounded"
-      />
-    )
+    return <img src={company.logo_url} alt={`Logo ${company.name}`} className="w-9 h-9 object-contain rounded" />
   }
   return (
-    <div
-      className="w-9 h-9 bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0"
-      aria-hidden="true"
-    >
-      <span className="text-[11px] font-bold text-slate-400">
-        {company.name[0]?.toUpperCase() ?? 'C'}
-      </span>
+    <div className="w-9 h-9 bg-slate-800 border border-slate-700 flex items-center justify-center shrink-0">
+      <span className="text-[11px] font-bold text-slate-400">{company.name[0]?.toUpperCase() ?? 'C'}</span>
     </div>
   )
 }
 
 // ── Page principale ───────────────────────────────────────────
-
 export default function CompaniesPage() {
   const router = useRouter()
   const { toast }                 = useToast()
   const { isAdmin, isCommercial } = useAuth()
 
-  const [companies, setCompanies]   = useState<Company[]>([])
-  const [pagination, setPagination] = useState<Pagination>({
-    page: 1, limit: 20, total: 0, totalPages: 1,
-  })
+  // Toutes les entreprises chargées (sans pagination API)
+  const [allCompanies, setAllCompanies] = useState<Company[]>([])
   const [loading, setLoading]           = useState(true)
   const [statsLoading, setStatsLoading] = useState(true)
-  const [stats, setStats]               = useState<{
-    total: number; new_this_month: number
-  } | null>(null)
+  const [stats, setStats]               = useState<{ total: number; new_this_month: number } | null>(null)
 
   const [search, setSearch]                 = useState('')
   const [filterIndustry, setFilterIndustry] = useState('')
-  const [page, setPage]                     = useState(1)
+  const [showModal, setShowModal]           = useState(false)
+  const [editCompany, setEditCompany]       = useState<Company | null>(null)
+  const [deletingId, setDeletingId]         = useState<string | null>(null)
 
-  const [showModal, setShowModal]     = useState(false)
-  const [editCompany, setEditCompany] = useState<Company | null>(null)
-  const [deletingId, setDeletingId]   = useState<string | null>(null)
+  // ── Filtrage local ────────────────────────────────────────
+  const filtered = allCompanies.filter(c => {
+    const matchSearch   = !search || c.name.toLowerCase().includes(search.toLowerCase()) || (c.domain ?? '').toLowerCase().includes(search.toLowerCase())
+    const matchIndustry = !filterIndustry || c.industry === filterIndustry
+    return matchSearch && matchIndustry
+  })
+
+  // ── Pagination client (5 par page) ───────────────────────
+  const pagination = usePagination(filtered, PAGE_SIZE)
+
+  // Reset page quand les filtres changent
+  useEffect(() => { pagination.reset() }, [search, filterIndustry])
 
   const fetchCompanies = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await companiesService.list({
-        search:   search || undefined,
-        industry: filterIndustry || undefined,
-        page,
-        limit:    20,
-      })
-      setCompanies(data.data)
-      setPagination(data.pagination)
+      // On charge TOUTES les entreprises (jusqu'à 500) pour filtrage local
+      const data = await companiesService.list({ limit: 500 })
+      setAllCompanies(data.data)
     } catch {
-      toast('error', 'Erreur de chargement', 'Impossible de recuperer les entreprises.')
+      toast('error', 'Erreur de chargement', 'Impossible de récupérer les entreprises.')
     } finally {
       setLoading(false)
     }
-  }, [search, filterIndustry, page, toast])
+  }, [toast])
 
   useEffect(() => { fetchCompanies() }, [fetchCompanies])
 
@@ -179,14 +134,14 @@ export default function CompaniesPage() {
   }, [])
 
   const handleDelete = async (company: Company) => {
-    if (!confirm(`Supprimer ${company.name} ? Les contacts associes seront desassocies.`)) return
+    if (!confirm(`Supprimer ${company.name} ?`)) return
     setDeletingId(company.id)
     try {
       await companiesService.remove(company.id)
-      toast('success', 'Entreprise supprimee', `${company.name} a ete supprimee.`)
+      toast('success', 'Entreprise supprimée', `${company.name} a été supprimée.`)
       fetchCompanies()
     } catch {
-      toast('error', 'Erreur', 'La suppression a echoue.')
+      toast('error', 'Erreur', 'La suppression a échoué.')
     } finally {
       setDeletingId(null)
     }
@@ -200,13 +155,12 @@ export default function CompaniesPage() {
 
   return (
     <div className="flex flex-col h-full bg-slate-950">
-
-      {/* En-tete */}
+      {/* En-tête */}
       <div className="px-6 py-5 border-b border-slate-800 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 border border-slate-800 flex items-center justify-center">
-              <Building2 className="w-4 h-4 text-slate-500" aria-hidden="true" />
+              <Building2 className="w-4 h-4 text-slate-500" />
             </div>
             <div>
               <div className="h-px w-6 bg-blue-500 mb-1.5" />
@@ -218,7 +172,7 @@ export default function CompaniesPage() {
               onClick={() => { setEditCompany(null); setShowModal(true) }}
               className="flex items-center gap-2 px-4 py-2 text-xs font-bold tracking-wider uppercase bg-blue-600 text-white hover:bg-blue-500 transition-all"
             >
-              <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+              <Plus className="w-3.5 h-3.5" />
               Nouvelle entreprise
             </button>
           )}
@@ -242,190 +196,117 @@ export default function CompaniesPage() {
               type="search"
               placeholder="Rechercher par nom, domaine..."
               value={search}
-              onChange={e => { setSearch(e.target.value); setPage(1) }}
-              aria-label="Rechercher une entreprise"
+              onChange={e => setSearch(e.target.value)}
               className="w-full pl-9 pr-4 py-2 text-sm bg-slate-900 border border-slate-800 text-slate-200 placeholder:text-slate-700 outline-none focus:border-blue-600/60 transition-all rounded-none"
             />
           </div>
           <div className="relative min-w-48">
             <select
               value={filterIndustry}
-              onChange={e => { setFilterIndustry(e.target.value); setPage(1) }}
-              aria-label="Filtrer par secteur"
+              onChange={e => setFilterIndustry(e.target.value)}
               className="w-full px-3 py-2 pr-8 text-sm bg-slate-900 border border-slate-800 text-slate-300 outline-none focus:border-blue-600/60 transition-all rounded-none appearance-none"
             >
               <option value="">Tous les secteurs</option>
               {INDUSTRY_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600 pointer-events-none" aria-hidden="true" />
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-600 pointer-events-none" />
           </div>
+        </div>
+
+        {/* Compteur + info pagination */}
+        <div className="flex items-center justify-between text-xs text-slate-600">
+          <span>
+            {loading ? 'Chargement...' : `${filtered.length} entreprise${filtered.length !== 1 ? 's' : ''} — page ${pagination.page}/${pagination.totalPages}`}
+          </span>
+          {(search || filterIndustry) && (
+            <button onClick={() => { setSearch(''); setFilterIndustry('') }} className="text-blue-500 hover:text-blue-300 transition-colors">
+              Réinitialiser les filtres
+            </button>
+          )}
         </div>
 
         {/* Tableau */}
         <div className="bg-slate-900 border border-slate-800 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full" aria-label="Liste des entreprises">
+            <table className="w-full">
               <thead className="bg-slate-950/60 border-b border-slate-800">
                 <tr>
-                  {[
-                    { label: 'Entreprise',   icon: Building2  },
-                    { label: 'Secteur',      icon: Factory    },
-                    { label: 'Taille',       icon: Users      },
-                    { label: 'Localisation', icon: MapPin     },
-                    { label: 'Contacts',     icon: Users      },
-                    { label: 'CA Annuel',    icon: DollarSign },
-                    { label: '',             icon: null       },
-                  ].map((h, i) => (
-                    <th key={i} scope="col" className="px-5 py-3.5 text-left">
-                      {h.label && (
-                        <span className="text-[10px] font-bold tracking-[0.18em] uppercase text-slate-600">
-                          {h.label}
-                        </span>
-                      )}
+                  {['Entreprise', 'Secteur', 'Taille', 'Localisation', 'Contacts', 'CA Annuel', ''].map((h, i) => (
+                    <th key={i} className="px-5 py-3.5 text-left">
+                      {h && <span className="text-[10px] font-bold tracking-[0.18em] uppercase text-slate-600">{h}</span>}
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
                 {loading ? (
-                  <TableSkeleton rows={8} cols={7} />
-                ) : companies.length === 0 ? (
+                  <TableSkeleton rows={PAGE_SIZE} cols={7} />
+                ) : pagination.pageItems.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="text-center py-16 text-slate-600 text-sm">
-                      Aucune entreprise trouvee
-                      {(search || filterIndustry) && (
-                        <button
-                          onClick={() => { setSearch(''); setFilterIndustry(''); setPage(1) }}
-                          className="ml-2 text-blue-500 hover:text-blue-300 transition-colors underline underline-offset-2"
-                        >
-                          Reinitialiser les filtres
-                        </button>
-                      )}
+                      Aucune entreprise trouvée
                     </td>
                   </tr>
                 ) : (
-                  companies.map(company => (
+                  pagination.pageItems.map(company => (
                     <tr
                       key={company.id}
                       className="hover:bg-slate-800/30 transition-colors cursor-pointer group"
                       onClick={() => router.push(`/companies/${company.id}`)}
-                      tabIndex={0}
-                      onKeyDown={e => e.key === 'Enter' && router.push(`/companies/${company.id}`)}
-                      aria-label={`Voir les details de ${company.name}`}
                     >
-                      {/* Nom */}
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-3">
                           <CompanyLogo company={company} />
                           <div>
                             <p className="text-sm font-semibold text-slate-200">{company.name}</p>
-                            {company.domain && (
-                              <p className="text-xs text-slate-600 mt-0.5">{company.domain}</p>
-                            )}
+                            {company.domain && <p className="text-xs text-slate-600 mt-0.5">{company.domain}</p>}
                           </div>
                         </div>
                       </td>
-
-                      {/* Secteur */}
                       <td className="px-5 py-3.5">
-                        {company.industry ? (
-                          <div className="flex items-center gap-1.5">
-                            <Factory className="w-3 h-3 text-slate-700 shrink-0" aria-hidden="true" />
-                            <span className="text-sm text-slate-400">{company.industry}</span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-700 text-sm" aria-label="Non renseigne">—</span>
-                        )}
+                        {company.industry
+                          ? <div className="flex items-center gap-1.5"><Factory className="w-3 h-3 text-slate-700 shrink-0" /><span className="text-sm text-slate-400">{company.industry}</span></div>
+                          : <span className="text-slate-700 text-sm">—</span>}
                       </td>
-
-                      {/* Taille */}
                       <td className="px-5 py-3.5">
-                        {company.size ? (
-                          <span className="text-[10px] font-bold px-2 py-1 border border-slate-700 text-slate-400 bg-slate-800/40">
-                            {company.size}
-                          </span>
-                        ) : (
-                          <span className="text-slate-700 text-sm" aria-label="Non renseigne">—</span>
-                        )}
+                        {company.size
+                          ? <span className="text-[10px] font-bold px-2 py-1 border border-slate-700 text-slate-400 bg-slate-800/40">{company.size}</span>
+                          : <span className="text-slate-700 text-sm">—</span>}
                       </td>
-
-                      {/* Localisation */}
                       <td className="px-5 py-3.5">
-                        {company.city ? (
-                          <div className="flex items-center gap-1.5">
-                            <MapPin className="w-3 h-3 text-slate-700 shrink-0" aria-hidden="true" />
-                            <span className="text-sm text-slate-400">
-                              {company.city}{company.country ? `, ${company.country}` : ''}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-700 text-sm" aria-label="Non renseigne">—</span>
-                        )}
+                        {company.city
+                          ? <div className="flex items-center gap-1.5"><MapPin className="w-3 h-3 text-slate-700 shrink-0" /><span className="text-sm text-slate-400">{company.city}{company.country ? `, ${company.country}` : ''}</span></div>
+                          : <span className="text-slate-700 text-sm">—</span>}
                       </td>
-
-                      {/* Contacts */}
                       <td className="px-5 py-3.5">
                         <div className="flex items-center gap-1.5">
-                          <Users className="w-3 h-3 text-slate-700" aria-hidden="true" />
-                          <span className="text-sm text-slate-400 tabular-nums">
-                            {company.contacts_count ?? 0}
-                          </span>
+                          <Users className="w-3 h-3 text-slate-700" />
+                          <span className="text-sm text-slate-400 tabular-nums">{company.contacts_count ?? 0}</span>
                         </div>
                       </td>
-
-                      {/* CA Annuel */}
                       <td className="px-5 py-3.5">
-                        {company.annual_revenue ? (
-                          <span className="text-sm font-medium text-slate-300 tabular-nums">
-                            {new Intl.NumberFormat('fr-FR', {
-                              style: 'currency', currency: 'EUR', maximumFractionDigits: 0,
-                            }).format(Number(company.annual_revenue))}
-                          </span>
-                        ) : (
-                          <span className="text-slate-700 text-sm" aria-label="Non renseigne">—</span>
-                        )}
+                        {company.annual_revenue
+                          ? <span className="text-sm font-medium text-slate-300 tabular-nums">{new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(company.annual_revenue))}</span>
+                          : <span className="text-slate-700 text-sm">—</span>}
                       </td>
-
-                      {/* Actions */}
-                      <td
-                        className="px-5 py-3.5 text-right"
-                        onClick={e => e.stopPropagation()}
-                      >
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                      <td className="px-5 py-3.5 text-right" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Tooltip label="Ouvrir">
-                            <button
-                              onClick={() => router.push(`/companies/${company.id}`)}
-                              className="p-1.5 text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-all"
-                              aria-label={`Ouvrir ${company.name}`}
-                            >
+                            <button onClick={() => router.push(`/companies/${company.id}`)} className="p-1.5 text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-all">
                               <ArrowUpRight className="w-3.5 h-3.5" />
                             </button>
                           </Tooltip>
-
                           {isCommercial && (
                             <Tooltip label="Modifier">
-                              <button
-                                onClick={() => { setEditCompany(company); setShowModal(true) }}
-                                className="p-1.5 text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-all"
-                                aria-label={`Modifier ${company.name}`}
-                              >
+                              <button onClick={() => { setEditCompany(company); setShowModal(true) }} className="p-1.5 text-slate-600 hover:text-slate-300 hover:bg-slate-800 transition-all">
                                 <Pencil className="w-3.5 h-3.5" />
                               </button>
                             </Tooltip>
                           )}
-
                           {isAdmin && (
                             <Tooltip label="Supprimer">
-                              <button
-                                onClick={() => handleDelete(company)}
-                                disabled={deletingId === company.id}
-                                className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-950/30 transition-all disabled:opacity-40"
-                                aria-label={`Supprimer ${company.name}`}
-                              >
-                                {deletingId === company.id
-                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-                                  : <Trash2 className="w-3.5 h-3.5" />
-                                }
+                              <button onClick={() => handleDelete(company)} disabled={deletingId === company.id} className="p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-950/30 transition-all disabled:opacity-40">
+                                {deletingId === company.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                               </button>
                             </Tooltip>
                           )}
@@ -439,40 +320,19 @@ export default function CompaniesPage() {
           </div>
         </div>
 
-        {/* Pagination */}
-        {!loading && pagination.totalPages > 1 && (
-          <nav className="flex items-center justify-between" aria-label="Pagination">
-            <p className="text-xs text-slate-600">
-              Page {pagination.page} / {pagination.totalPages} — {pagination.total}{' '}
-              entreprise{pagination.total !== 1 ? 's' : ''}
-            </p>
-            <div className="flex gap-1">
-              <Tooltip label="Page précédente">
-                <button
-                  disabled={pagination.page <= 1}
-                  onClick={() => setPage(p => p - 1)}
-                  aria-label="Page précédente"
-                  className="p-2 border border-slate-800 text-slate-500 hover:border-slate-600 hover:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-              </Tooltip>
-              <Tooltip label="Page suivante">
-                <button
-                  disabled={pagination.page >= pagination.totalPages}
-                  onClick={() => setPage(p => p + 1)}
-                  aria-label="Page suivante"
-                  className="p-2 border border-slate-800 text-slate-500 hover:border-slate-600 hover:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </Tooltip>
-            </div>
-          </nav>
-        )}
+        {/* ── Pagination ── */}
+        <Pagination
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          total={filtered.length}
+          limit={PAGE_SIZE}
+          onPrev={pagination.prevPage}
+          onNext={pagination.nextPage}
+          onPage={pagination.setPage}
+          entityLabel="entreprises"
+        />
       </div>
 
-      {/* Modal formulaire */}
       {showModal && (
         <CompanyModal
           company={editCompany}
