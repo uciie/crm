@@ -13,11 +13,20 @@ import { eq }           from 'drizzle-orm'
 
 import { db }       from '../database/db.config'
 import { profiles } from '../database/schema'
+import { IsString, IsOptional, IsUrl } from 'class-validator';
 
 export class UpdateProfileDto {
-  full_name?:  string
-  phone?:      string
-  avatar_url?: string
+  @IsString()
+  @IsOptional()
+  full_name?: string;
+
+  @IsString()
+  @IsOptional()
+  phone?: string;
+
+  @IsUrl()
+  @IsOptional()
+  avatar_url?: string;
 }
 
 export class UpdateUserRoleDto {

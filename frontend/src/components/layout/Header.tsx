@@ -1,6 +1,7 @@
 'use client'
 
 import { useState }                        from 'react'
+import Link                                from 'next/link'
 import { usePathname, useRouter }          from 'next/navigation'
 import { Settings, ChevronDown, LogOut, User, RotateCw } from 'lucide-react'
 import { useAuth }                         from '@/hooks/useAuth'
@@ -14,10 +15,11 @@ const ROUTE_LABELS: Record<string, string> = {
   '/contacts':   'Contacts',
   '/companies':  'Entreprises',
   '/pipeline':   'Pipeline de vente',
-  '/leads':      'Opportunites',
-  '/tasks':      'Taches',
+  '/leads':      'Opportunités',
+  '/tasks':      'Tâches',
   '/campaigns':  'Campagnes',
-  '/settings':   'Parametres',
+  '/settings':   'Paramètres',
+  '/profile':    'Mon Profil',
 }
 
 function getRouteLabel(pathname: string): string {
@@ -52,9 +54,6 @@ export function Header() {
 
   const handleRefresh = () => {
     setSpinning(true)
-    // router.refresh() force Next.js App Router à re-fetcher les Server Components
-    // et invalide le cache des données sans recharger toute la page.
-    // router.push() ne déclenchait rien car on était déjà sur la même route.
     router.refresh()
     setTimeout(() => setSpinning(false), 800)
   }
@@ -123,6 +122,7 @@ export function Header() {
             <>
               <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
               <div className="absolute right-0 top-10 z-20 w-52 bg-slate-900 border border-slate-800 shadow-2xl shadow-black/50">
+
                 {/* Profile info */}
                 <div className="px-4 py-3 border-b border-slate-800">
                   <p className="text-xs font-semibold text-slate-200 truncate">{profile?.full_name}</p>
@@ -133,20 +133,36 @@ export function Header() {
 
                 {/* Actions */}
                 <div className="py-1">
-                  <button
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors text-left"
+
+                  {/* ── Mon Profil — lien vers /profile ── */}
+                  <Link
+                    href="/profile"
                     onClick={() => setMenuOpen(false)}
+                    className={cn(
+                      'w-full flex items-center gap-2.5 px-4 py-2.5',
+                      'text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200',
+                      'transition-colors text-left',
+                      pathname.startsWith('/profile') && 'bg-slate-800/60 text-slate-200',
+                    )}
                   >
                     <User className="w-3.5 h-3.5" />
                     Mon profil
-                  </button>
-                  <button
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200 transition-colors text-left"
+                  </Link>
+
+                  {/* ── Paramètres — lien vers /settings ── */}
+                  <Link
+                    href="/settings"
                     onClick={() => setMenuOpen(false)}
+                    className={cn(
+                      'w-full flex items-center gap-2.5 px-4 py-2.5',
+                      'text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200',
+                      'transition-colors text-left',
+                      pathname.startsWith('/settings') && 'bg-slate-800/60 text-slate-200',
+                    )}
                   >
                     <Settings className="w-3.5 h-3.5" />
-                    Parametres
-                  </button>
+                    Paramètres
+                  </Link>
                 </div>
 
                 {/* Logout */}
@@ -156,7 +172,7 @@ export function Header() {
                     className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-red-400 hover:bg-red-950/30 hover:text-red-300 transition-colors text-left"
                   >
                     <LogOut className="w-3.5 h-3.5" />
-                    Deconnexion
+                    Déconnexion
                   </button>
                 </div>
               </div>

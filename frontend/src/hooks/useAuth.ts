@@ -1,92 +1,27 @@
 'use client'
 // ============================================================
 // hooks/useAuth.ts
+//
+// Lecteur pur du store Zustand.
+// Aucun useEffect, aucun onAuthStateChange, aucun état local.
+// Peut être appelé dans autant de composants que nécessaire
+// sans effet de bord — toujours la même source de vérité.
 // ============================================================
 
-import { useEffect, useRef, useState } from 'react'
-import { useRouter }                   from 'next/navigation'
-import { createClient }                from '@/lib/supabase/client'
-import { useAuthStore }                from '@/store/authStore'
-import type { User }                   from '@supabase/supabase-js'
-import type { Profile }                from '@/types'
+import { useRouter }    from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
+import { useAuthStore } from '@/store/authStore'
 
 const supabase = createClient()
 
 export function useAuth() {
-  const [user, setUser]       = useState<User | null>(null)
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
+  const router = useRouter()
 
-  const router   = useRouter()
-  const mounted  = useRef(true)
-
-  // Acces au store Zustand pour la reinitialisation lors du logout
-  const clearAuth = useAuthStore(state => state.clearAuth)
-
-  useEffect(() => {
-    mounted.current = true
-
-    const loadProfile = async (userId: string) => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
-
-      if (!mounted.current) return
-
-      if (error && error.code !== 'PGRST116') {
-        console.warn('[useAuth] profil introuvable:', error.code, error.message)
-      }
-
-      setProfile(data ?? null)
-    }
-
-    const init = async () => {
-      try {
-        const { data: { user: verifiedUser } } = await supabase.auth.getUser()
-
-        if (!mounted.current) return
-
-        setUser(verifiedUser)
-
-        if (verifiedUser) {
-          await loadProfile(verifiedUser.id)
-        }
-      } catch (e) {
-        console.error('[useAuth] init error:', e)
-        if (mounted.current) setUser(null)
-      } finally {
-        if (mounted.current) setLoading(false)
-      }
-    }
-
-    void init()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!mounted.current) return
-
-        const currentUser = session?.user ?? null
-        setUser(currentUser)
-
-        if (currentUser) {
-          await loadProfile(currentUser.id)
-        } else {
-          setProfile(null)
-        }
-
-        if (event === 'SIGNED_IN') {
-          router.refresh()
-        }
-      }
-    )
-
-    return () => {
-      mounted.current = false
-      subscription.unsubscribe()
-    }
-  }, [])
+  const user            = useAuthStore(s => s.user)
+  const profile         = useAuthStore(s => s.profile)
+  const loading         = useAuthStore(s => s.loading)
+  const clearAuth       = useAuthStore(s => s.clearAuth)
+  const refreshProfile  = useAuthStore(s => s.refreshProfile)
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -110,10 +45,7 @@ export function useAuth() {
 
   const signOut = async () => {
     await supabase.auth.signOut()
-
-    // Reinitialisation du store Zustand — evite un profil perime en cache
     clearAuth()
-
     router.push('/login')
     router.refresh()
   }
@@ -121,5 +53,15 @@ export function useAuth() {
   const isAdmin      = profile?.role === 'admin'
   const isCommercial = profile?.role === 'commercial' || isAdmin
 
-  return { user, profile, loading, isAdmin, isCommercial, signIn, signUp, signOut }
+  return {
+    user,
+    profile,
+    loading,
+    isAdmin,
+    isCommercial,
+    signIn,
+    signUp,
+    signOut,
+    refreshProfile,
+  }
 }
