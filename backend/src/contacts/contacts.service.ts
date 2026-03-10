@@ -149,7 +149,11 @@ export class ContactsService {
 
   // ── CREATE (POST /contacts) ────────────────────────────────
 
-  async create(createContactDto: CreateContactDto, userId: string) {
+  async create(createContactDto: CreateContactDto, userId: string, userRole: string) {
+    // Seuls les admins et commerciaux peuvent créer des contacts
+    if (userRole === 'utilisateur') {
+      throw new ForbiddenException('Création de contact non autorisée.')
+    }
     const [newContact] = await db
       .insert(contacts)
       .values({ ...createContactDto, created_by: userId })

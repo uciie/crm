@@ -64,6 +64,7 @@ export class AuthController {
   // ── GET /auth/users ──────────────────────────────────────
   // Liste tous les utilisateurs (admin uniquement)
   @Get('users')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   findAllUsers() {
     return this.authService.findAllUsers()
@@ -73,6 +74,7 @@ export class AuthController {
   // Invite un nouvel utilisateur par email (admin uniquement)
   // Supabase envoie un email d'invitation automatiquement
   @Post('invite')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   inviteUser(
     @Body() dto: InviteUserDto,
@@ -83,6 +85,7 @@ export class AuthController {
   // ── PATCH /auth/users/:id/role ───────────────────────────
   // Change le rôle d'un utilisateur (admin uniquement)
   @Patch('users/:id/role')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   updateRole(
     @Request() req: { user: AuthUser },
@@ -95,6 +98,7 @@ export class AuthController {
   // ── PATCH /auth/users/:id/active ─────────────────────────
   // Active ou désactive un utilisateur (admin uniquement)
   @Patch('users/:id/active')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   toggleActive(
     @Request() req: { user: AuthUser },
@@ -107,6 +111,7 @@ export class AuthController {
   // ── DELETE /auth/users/:id ───────────────────────────────
   // Supprime un utilisateur (admin uniquement)
   @Delete('users/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @HttpCode(HttpStatus.OK)
   deleteUser(

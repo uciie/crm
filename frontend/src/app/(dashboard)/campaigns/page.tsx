@@ -29,6 +29,7 @@ import {
   HTML_PROMO_PRINTEMPS,
   HTML_ONBOARDING,
 } from './campaign-templates'
+import { useAuth } from '@/hooks/useAuth'
 
 // ── Correspondance nom de campagne → template HTML local ─────
 // Permet d'afficher les aperçus même si htmlContent n'est pas
@@ -208,7 +209,8 @@ export default function CampaignsPage() {
   const [showModal, setShowModal]   = useState(false)
   const [preview, setPreview]       = useState<(EmailCampaign & { htmlContent?: string }) | null>(null)
   const [view, setView]             = useState<'table' | 'charts'>('table')
-
+  const { isAdmin, isCommercial } = useAuth()
+  
   const loadCampaigns = () => {
     setLoading(true)
     api.get<EmailCampaign[]>('/email/campaigns')
@@ -303,20 +305,23 @@ export default function CampaignsPage() {
               <BarChart2 className="w-3.5 h-3.5" /> Graphiques
             </button>
           </div>
+          {(isAdmin || isCommercial) && (
+            <button
+              onClick={handleSyncAll}
+              disabled={syncing}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500 transition-colors disabled:opacity-40 rounded"
+            >
+              {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+              Sync Brevo
+            </button>
+          )}
 
-          <button
-            onClick={handleSyncAll}
-            disabled={syncing}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold border border-gray-700 text-gray-400 hover:text-gray-200 hover:border-gray-500 transition-colors disabled:opacity-40 rounded"
-          >
-            {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-            Sync Brevo
-          </button>
-
-          <Button onClick={() => setShowModal(true)}>
-            <Plus className="w-3.5 h-3.5 mr-1" />
-            Nouvelle campagne
-          </Button>
+          {isAdmin && (
+            <Button onClick={() => setShowModal(true)}>
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              Nouvelle campagne
+            </Button>
+          )}
         </div>
       </div>
 

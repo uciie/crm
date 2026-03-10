@@ -33,14 +33,19 @@ export class LeadsService {
   constructor(private readonly emailService: EmailService) {} // ← NEW
 
   async findAll(user: AuthUser, filters: LeadFilters = {}) {
+    // ── Permissions: "utilisateur" n'a accès qu'aux leads non assignés ou qui lui sont assignés
+    if (user.role === 'utilisateur') {
+      throw new ForbiddenException('Accès aux leads non autorisé.')
+    }
+
     const { search, status, contact_id, company_id, assigned_to, page = 1, limit = 20 } = filters
     const offset = (page - 1) * limit
 
     const conditions: any[] = []
-
-    if (user.role !== 'admin') {
-      conditions.push(or(eq(leads.assigned_to, user.id), isNull(leads.assigned_to)))
-    } else if (assigned_to) {
+    // Les commerciaux voient leurs leads, les admins peuvent filtrer par assigned_to
+    if (user.role == 'commercial') {
+      conditions.push(or(eq(leads.assigned_to, user.id)))
+    } else if (user.role === 'admin' && assigned_to) {
       conditions.push(eq(leads.assigned_to, assigned_to))
     }
 
@@ -103,6 +108,10 @@ export class LeadsService {
   }
 
   async findOne(id: string, user: AuthUser) {
+    // ── Permissions: "utilisateur" n'a accès qu'aux leads non assignés ou qui lui sont assignés
+    if (user.role === 'utilisateur') {
+      throw new ForbiddenException('Accès aux leads non autorisé.')
+    }
     const [lead] = await db
       .select()
       .from(leads)
@@ -114,7 +123,8 @@ export class LeadsService {
 
     if (!lead) throw new NotFoundException('Lead introuvable')
 
-    if (user.role !== 'admin' && lead.leads.assigned_to !== user.id && lead.leads.assigned_to !== null) {
+    // Vérification d'accès : les commerciaux ne peuvent voir que leurs leads ou les leads non assignés
+    if (user.role === 'commercial' && lead.leads.assigned_to !== user.id) {
       throw new ForbiddenException('Accès refusé')
     }
 
@@ -170,6 +180,9 @@ export class LeadsService {
   }
 
   async update(id: string, dto: Partial<CreateLeadDto>, user: AuthUser) {
+    if (user.role === 'utilisateur') {
+      throw new ForbiddenException('Permission insuffisante.')
+    }
     await this.findOne(id, user)
 
     const updatePayload: any = { ...dto, updated_at: new Date() }

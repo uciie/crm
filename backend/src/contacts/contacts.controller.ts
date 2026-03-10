@@ -43,7 +43,7 @@ export class ContactsController {
   @Post()
   @Roles('admin', 'commercial')
   create(@Body() dto: CreateContactDto, @Request() req: any) {
-    return this.contactsService.create(dto, req.user.id)
+    return this.contactsService.create(dto, req.user.id, req.user.role)
   }
 
   // PATCH /contacts/:id
