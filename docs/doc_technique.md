@@ -204,7 +204,7 @@ Ces distinctions sont déjà implémentées dans `JwtAuthGuard` et `JwtStrategy`
 
 ### 5.3 Entreprises
 
-![Sequence — Entreprises](sequences/seq_entreprises.png)
+![Sequence — Entreprises](sequences/seq_entreprise.png)
 
 ---
 
@@ -220,13 +220,13 @@ Ces distinctions sont déjà implémentées dans `JwtAuthGuard` et `JwtStrategy`
 
 ---
 
-### 5.6 Cycle de vie d'une tâche *(enrichi)*
+### 5.6 Cycle de vie d'une tâche 
 
-![Sequence — Tâches](sequences/seq_taches.png)
+![Sequence — Tâches](sequences/seq_tache.png)
 
 ---
 
-### 5.7 Campagnes Email — Brevo *(enrichi)*
+### 5.7 Campagnes Email — Brevo 
 
 ![Sequence — Campagnes Email](sequences/seq_campagne_email.png)
 
