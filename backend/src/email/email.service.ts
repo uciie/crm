@@ -476,20 +476,39 @@ export class EmailService implements OnModuleInit {
 
     if (campaign.brevo_campaign_id && this.brevo) {
       try {
-        const result = await this.brevo.emailCampaigns.getEmailCampaign({
-          campaignId: campaign.brevo_campaign_id,  // ← objet { campaignId }
+        const result      = await this.brevo.emailCampaigns.getEmailCampaign({
+          campaignId: campaign.brevo_campaign_id,
         })
-        const stats      = (result as any).statistics?.globalStats
+        const statistics  = (result as any).statistics ?? {}
         const brevoStatus = String((result as any).status ?? '')
         const mappedStatus = mapBrevoStatus(brevoStatus, campaign.status)
 
         this.logger.log(`   sync: brevo_status="${brevoStatus}" → mapped="${mappedStatus}"`)
 
-        const sentCount  = stats?.sent         ?? 0
-        const openCount  = stats?.uniqueOpens  ?? 0
-        const clickCount = stats?.uniqueClicks ?? 0
-        const openRate   = sentCount > 0 ? ((openCount  / sentCount) * 100).toFixed(2) : '0'
-        const clickRate  = sentCount > 0 ? ((clickCount / sentCount) * 100).toFixed(2) : '0'
+        // ── Agrégation de campaignStats[] ──────────────────────────────────────
+        // Brevo ne remplit globalStats que pour les grandes campagnes (>1 000 envois).
+        // Pour les campagnes plus petites, les vraies données sont dans campaignStats,
+        // un tableau d'une entrée par liste destinataire. On les somme ici.
+        const rows: any[] = Array.isArray(statistics.campaignStats)
+          ? statistics.campaignStats
+          : []
+
+        const sum = (key: string): number =>
+          rows.reduce((acc, r) => acc + (Number(r[key]) || 0), 0)
+
+        // Fallback sur globalStats si campaignStats est vide (cas théorique)
+        const g = statistics.globalStats ?? {}
+
+        const sentCount   = rows.length > 0 ? sum('delivered')       : (g.delivered       ?? g.sent ?? 0)
+        const openCount   = rows.length > 0 ? sum('uniqueViews')      : (g.uniqueViews     ?? 0)
+        const clickCount  = rows.length > 0 ? sum('uniqueClicks')     : (g.uniqueClicks    ?? 0)
+        const unsubCount  = rows.length > 0 ? sum('unsubscriptions')  : (g.unsubscriptions ?? 0)
+        const bounceCount = rows.length > 0 ? sum('hardBounces')      : (g.hardBounces     ?? 0)
+
+        // Taux calculés sur la base des emails délivrés (cohérent avec le dashboard Brevo)
+        const base      = sentCount > 0 ? sentCount : 1
+        const openRate  = ((openCount  / base) * 100).toFixed(2)
+        const clickRate = ((clickCount / base) * 100).toFixed(2)
 
         await db
           .update(emailCampaigns)
@@ -499,14 +518,18 @@ export class EmailService implements OnModuleInit {
             click_count:       clickCount,
             open_rate:         openRate,
             click_rate:        clickRate,
-            unsubscribe_count: stats?.unsubscribed ?? 0,
-            bounce_count:      stats?.hardBounces  ?? 0,
+            unsubscribe_count: unsubCount,
+            bounce_count:      bounceCount,
             status:            mappedStatus as CampaignStatus,
             updated_at:        new Date(),
           })
           .where(eq(emailCampaigns.id, campaignId))
 
-        this.logger.log(`✅ Stats campagne ${campaignId} synchronisées — status="${mappedStatus}" open=${openRate}% click=${clickRate}%`)
+        this.logger.log(
+          `✅ Stats campagne ${campaignId} synchronisées — ` +
+          `status="${mappedStatus}" sent=${sentCount} ` +
+          `open=${openRate}% (${openCount}) click=${clickRate}% (${clickCount})`
+        )
       } catch (err: any) {
         this.logger.error(`❌ syncCampaignStats: ${err?.message}`)
       }
