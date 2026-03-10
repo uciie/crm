@@ -11,6 +11,11 @@ graph TD
     UC7["Échanger code PKCE → Session"]
     UC8["Envoyer email de confirmation"]
     UC9["Envoyer email de reset"]
+    UC10["Gérer l'erreur d'authentification"]
+    UC11["Token JWT expiré\n→ Session expirée.\nVeuillez vous reconnecter."]
+    UC12["Token absent\n→ Authentification requise."]
+    UC13["Token invalide\n→ Token invalide ou expiré."]
+    UC14["Compte désactivé\n→ Contactez votre administrateur."]
 
     V --> UC1
     V --> UC2
@@ -33,5 +38,20 @@ graph TD
     SA --> UC8
     SA --> UC9
 
+    %% Extension : erreurs d'authentification depuis JwtAuthGuard / JwtStrategy
+    UC1 -.->|extend| UC10
+    UC6 -.->|extend| UC10
+
+    %% Spécialisations de l'erreur d'authentification
+    UC10 -.->|extend\ninfo.message = 'jwt expired'| UC11
+    UC10 -.->|extend\ninfo.message = 'No auth token'| UC12
+    UC10 -.->|extend\ntoken présent mais invalide| UC13
+    UC10 -.->|extend\nis_active = false| UC14
+
     style V fill:#1e293b,stroke:#3b82f6,color:#e2e8f0
     style SA fill:#0f172a,stroke:#6366f1,color:#e2e8f0
+    style UC10 fill:#1e293b,stroke:#ef4444,color:#e2e8f0
+    style UC11 fill:#1e293b,stroke:#f97316,color:#e2e8f0
+    style UC12 fill:#1e293b,stroke:#f97316,color:#e2e8f0
+    style UC13 fill:#1e293b,stroke:#f97316,color:#e2e8f0
+    style UC14 fill:#1e293b,stroke:#f97316,color:#e2e8f0

@@ -2,6 +2,7 @@ graph TD
     A(["🛡️ Administrateur"])
     C(["💼 Commercial"])
     B(["📧 Brevo"])
+    CRM(["⚙️ Système CRM"])
 
     UC1["Lister les campagnes email"]
     UC2["Voir les statistiques (ouverture, clics)"]
@@ -9,28 +10,46 @@ graph TD
     UC4["Synchroniser les métriques Brevo"]
     UC5["Recevoir un webhook Brevo"]
     UC6["Mettre à jour le statut de livraison"]
-    UC7["Désabonner un contact (unsubscribe)"]
+    UC7["Désabonner un contact"]
     UC8["Être authentifié"]
+    UC9["Gérer un rebond"]
+    UC10["Bloquer l'envoi"]
+    UC11["Horodater l'événement"]
+    UC12["Calculer le ROI de la campagne"]
+    UC13["Mettre à jour les données financières"]
 
     A --> UC1
     A --> UC2
     A --> UC3
     A --> UC4
+    A --> UC13
 
     C --> UC1
     C --> UC2
 
     B --> UC5
 
+    CRM --> UC12
+
     UC1 -.->|include| UC8
     UC2 -.->|include| UC8
     UC3 -.->|include| UC8
     UC4 -.->|include| UC8
+    UC13 -.->|include| UC8
 
-    UC5 -.->|include| UC6
-    UC5 -.->|extend| UC7
     UC4 -.->|include| UC2
+
+    %% Décomposition du webhook selon le type d'événement
+    UC5 -.->|extend\ndelivered / opened / clicked| UC6
+    UC5 -.->|extend\nsoft_bounce / hard_bounce| UC9
+    UC5 -.->|extend\nunsubscribe| UC7
+    UC5 -.->|extend\nblocked| UC10
+    UC5 -.->|extend\nrequest / deferred / spam| UC11
+
+    %% Déclenchement automatique du ROI après mise à jour financière
+    UC13 -.->|include| UC12
 
     style A fill:#1e293b,stroke:#6366f1,color:#e2e8f0
     style C fill:#1e293b,stroke:#f59e0b,color:#e2e8f0
     style B fill:#0f172a,stroke:#34d399,color:#e2e8f0
+    style CRM fill:#0f172a,stroke:#94a3b8,color:#e2e8f0

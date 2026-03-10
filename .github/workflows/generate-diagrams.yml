@@ -21,26 +21,25 @@ jobs:
           # Utilise le token avec les droits d'écriture pour pouvoir push
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      # ─── MERMAID CLI ─────────────────────────────────────────────────────────
       - name: Install Mermaid CLI
         run: npm install -g @mermaid-js/mermaid-cli
 
-      # Puppeteer config (désactive le sandbox requis sur GitHub Actions)
+      # Puppeteer config (sandbox désactivé, requis sur GitHub Actions)
       - name: Create puppeteer-config.json
         run: echo '{"args":["--no-sandbox"]}' > puppeteer-config.json
 
-      # ─── Fonction de nettoyage ───────────────────────────────────────────────
+      # ─── NETTOYAGE DES FENCES ────────────────────────────────────────────────
       # Certains éditeurs sauvegardent les fichiers .mermaid avec des fences
       # ```mermaid ... ``` — mmdc n'accepte que le code brut, on les retire.
       - name: Strip markdown fences from all .mermaid files
         run: |
           find docs -name "*.mermaid" | while read file; do
-            # Supprime la ligne ouvrante ```mermaid (ou ```) et la ligne fermante ```
             sed -i '/^```/d' "$file"
-            # Supprime les éventuelles lignes vides en début de fichier
             sed -i '/./,$!d' "$file"
           done
 
-      # ─── MCD ────────────────────────────────────────────────────────────────
+      # ─── MCD ─────────────────────────────────────────────────────────────────
       - name: Generate PNG — docs/mcd.mermaid
         run: |
           if [ -f docs/mcd.mermaid ]; then
@@ -49,13 +48,13 @@ jobs:
               -i docs/mcd.mermaid \
               -o docs/mcd.png \
               -t forest \
-              -b transparent
+              -b white
             echo "docs/mcd.png généré"
           else
             echo "WARN: docs/mcd.mermaid introuvable, étape ignorée"
           fi
 
-      # ─── USE CASES ──────────────────────────────────────────────────────────
+      # ─── USE CASES ───────────────────────────────────────────────────────────
       - name: Generate PNGs — docs/use_cases/*.mermaid
         run: |
           mkdir -p docs/use_cases
@@ -68,18 +67,19 @@ jobs:
           for file in "${files[@]}"; do
             output="${file%.mermaid}.png"
             echo "INFO: Génération de $output"
+            # || true : un diagramme invalide ne bloque pas les suivants
             mmdc \
               -p puppeteer-config.json \
               -i "$file" \
               -o "$output" \
               -t dark \
-              -b transparent \
-              --width 1200 \
-              --height 900
+              -b white \
+              -w 1200 \
+              -H 900 || true
             echo "$output généré"
           done
 
-      # ─── SÉQUENCES ──────────────────────────────────────────────────────────
+      # ─── SÉQUENCES ───────────────────────────────────────────────────────────
       - name: Generate PNGs — docs/sequences/*.mermaid
         run: |
           mkdir -p docs/sequences
@@ -97,19 +97,17 @@ jobs:
               -i "$file" \
               -o "$output" \
               -t neutral \
-              -b transparent \
-              --width 1400 \
-              --height 1000
+              -b white \
+              -w 1400 \
+              -H 1000 || true
             echo "$output généré"
           done
 
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # Étape de vérification (Debug) pour voir si le dossier doc existe
-      - name: Prepare environment
-        run: mkdir -p doc
-
+      # ─── PDF ─────────────────────────────────────────────────────────────────
+      # --resource-path : liste tous les dossiers où Pandoc cherche les images.
+      #   '.' = racine, 'docs' = doc_technique.md, plus les sous-dossiers PNG.
+      # --pdf-engine=lualatex : supporte les PNG (y compris fond blanc/opaque)
+      #   contrairement à pdflatex qui rejette certains PNG générés par mmdc.
       - name: Render PDF with Pandoc
         uses: docker://pandoc/latex:latest
         with:
@@ -117,23 +115,34 @@ jobs:
             --from=markdown
             --to=pdf
             --output=docs/doc_technique.pdf
-            --pdf-engine=pdflatex
-            --resource-path=.:docs
+            --pdf-engine=lualatex
+            --resource-path=.:docs:docs/use_cases:docs/sequences
             --standalone
             docs/doc_technique.md
 
-      # Vérification de l'existence du fichier avant l'upload
-      - name: Check file existence
-        run: ls -l docs/doc_technique.pdf
+      # ─── VÉRIFICATION ────────────────────────────────────────────────────────
+      - name: Check generated files
+        run: |
+          echo "=== PNG use_cases ==="
+          ls -lh docs/use_cases/*.png 2>/dev/null || echo "Aucun PNG use_cases"
+          echo "=== PNG sequences ==="
+          ls -lh docs/sequences/*.png 2>/dev/null || echo "Aucun PNG sequences"
+          echo "=== PNG MCD ==="
+          ls -lh docs/mcd.png 2>/dev/null || echo "PNG MCD manquant !"
+          echo "=== PDF ==="
+          ls -lh docs/doc_technique.pdf 2>/dev/null || echo "PDF manquant !"
 
-      # ─── COMMIT ─────────────────────────────────────────────────────────────
+      # ─── COMMIT ──────────────────────────────────────────────────────────────
       - name: Commit and push generated PNGs and PDF
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          # Ajoute tous les PNG générés (use_cases, sequences, mcd)
-          git add docs/mcd.png docs/use_cases/*.png docs/sequences/*.png docs/doc_technique.pdf 2>/dev/null || true
-          # Ne commit que s'il y a des changements réels
+          git add \
+            docs/mcd.png \
+            docs/use_cases/*.png \
+            docs/sequences/*.png \
+            docs/doc_technique.pdf \
+            2>/dev/null || true
           if git diff --cached --quiet; then
             echo "Aucun changement à commiter"
           else
