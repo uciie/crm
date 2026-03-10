@@ -2,7 +2,7 @@
 
 > Plateforme CRM Full SaaS — Gestion des contacts, pipeline de vente et automatisation marketing.
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![Version](https://img.shields.io/github/v/tag/uciie/crm)
 ![Next.js](https://img.shields.io/badge/Next.js-14-black)
 ![NestJS](https://img.shields.io/badge/NestJS-10-red)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-green)
