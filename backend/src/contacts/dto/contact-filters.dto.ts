@@ -1,7 +1,15 @@
 import {
-  IsOptional, IsString, IsUUID, IsInt, Min, Max, IsIn
+  IsOptional, IsString, IsInt, Min, Max, Matches
 } from 'class-validator'
 import { Transform, Type } from 'class-transformer'
+
+// Regex UUID v4 — même pattern que update-task.dto.ts
+// @IsUUID() est incompatible avec enableImplicitConversion: true
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Convertit '' en undefined pour que @IsOptional() court-circuite la validation
+const emptyToUndefined = ({ value }: { value: unknown }) =>
+  value === '' ? undefined : value
 
 /**
  * DTO de filtrage et pagination pour GET /contacts.
@@ -18,12 +26,18 @@ export class ContactFiltersDto {
   @IsString()
   search?: string
 
+  // @IsUUID() remplacé par @Matches — évite les conflits avec enableImplicitConversion
   @IsOptional()
-  @IsUUID('4', { message: 'company_id doit être un UUID valide.' })
+  @Transform(emptyToUndefined)
+  @IsString()
+  @Matches(UUID_REGEX, { message: 'company_id doit être un UUID valide.' })
   company_id?: string
 
+  // @IsUUID() remplacé par @Matches — évite les conflits avec enableImplicitConversion
   @IsOptional()
-  @IsUUID('4', { message: 'assigned_to doit être un UUID valide.' })
+  @Transform(emptyToUndefined)
+  @IsString()
+  @Matches(UUID_REGEX, { message: 'assigned_to doit être un UUID valide.' })
   assigned_to?: string
 
   /**

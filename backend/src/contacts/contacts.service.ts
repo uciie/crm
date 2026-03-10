@@ -39,7 +39,6 @@ export class ContactsService {
 
     const offset = (page - 1) * limit
     const conditions: any[] = []
-
     // RLS : Les commerciaux voient leurs contacts + les non assignés
     if (user.role !== 'admin') {
       conditions.push(
@@ -66,7 +65,10 @@ export class ContactsService {
     if (city)        conditions.push(ilike(contacts.city, `%${city}%`))
 
     if (is_subscribed !== undefined && is_subscribed !== null) {
-      conditions.push(eq(contacts.is_subscribed, is_subscribed === true))
+      // FIX : is_subscribed est déjà un boolean transformé par le DTO.
+      // `=== true` était redondant et cassait le filtre `false`
+      // (false === true → false → cherchait toujours is_subscribed = false).
+      conditions.push(eq(contacts.is_subscribed, is_subscribed))
     }
 
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined
@@ -112,7 +114,6 @@ export class ContactsService {
       .select({ count: sql<number>`count(*)` })
       .from(contacts)
       .where(whereClause)
-
     return {
       data: rows,
       pagination: {
@@ -149,7 +150,9 @@ export class ContactsService {
 
   // ── CREATE (POST /contacts) ────────────────────────────────
 
-  async create(createContactDto: CreateContactDto, userId: string, userRole: string) {
+  // FIX : valeur par défaut pour userRole afin d'éviter que la vérification
+  // soit court-circuitée silencieusement si le paramètre est omis.
+  async create(createContactDto: CreateContactDto, userId: string, userRole: string = 'commercial') {
     // Seuls les admins et commerciaux peuvent créer des contacts
     if (userRole === 'utilisateur') {
       throw new ForbiddenException('Création de contact non autorisée.')

@@ -281,9 +281,14 @@ export function ContactsDataTable({
             <label className="block text-[10px] font-bold tracking-[0.18em] uppercase text-slate-600 mb-1.5">
               Entreprise
             </label>
+            {/* FIX : onChange appelle désormais setFilters en plus de l'état local */}
             <select
               value={filterCompany}
-              onChange={e => { setFilterCompany(e.target.value); setPage(1) }}
+              onChange={e => {
+                setFilterCompany(e.target.value)
+                setPage(1)
+                try { setFilters({ ...(filters || {}), company_id: e.target.value || undefined, page: 1 }) } catch (e) {}
+              }}
               className="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 text-slate-300 outline-none focus:border-blue-600/60 rounded-none"
             >
               <option value="">Toutes les entreprises</option>
@@ -297,9 +302,14 @@ export function ContactsDataTable({
             <label className="block text-[10px] font-bold tracking-[0.18em] uppercase text-slate-600 mb-1.5">
               Abonnement email
             </label>
+            {/* FIX : onChange appelle désormais setFilters en plus de l'état local */}
             <select
               value={filterSubscribed}
-              onChange={e => { setFilterSubscribed(e.target.value as any); setPage(1) }}
+              onChange={e => {
+                setFilterSubscribed(e.target.value as '' | 'true' | 'false')
+                setPage(1)
+                try { setFilters({ ...(filters || {}), is_subscribed: e.target.value || undefined, page: 1 }) } catch (e) {}
+              }}
               className="w-full px-3 py-2 text-sm bg-slate-950 border border-slate-800 text-slate-300 outline-none focus:border-blue-600/60 rounded-none"
             >
               <option value="">Tous</option>
@@ -314,6 +324,8 @@ export function ContactsDataTable({
                 setFilterCompany('')
                 setFilterSubscribed('')
                 setPage(1)
+                // FIX : réinitialise aussi les filtres du hook
+                try { setFilters({ ...(filters || {}), company_id: undefined, is_subscribed: undefined, page: 1 }) } catch (e) {}
               }}
               className="text-xs text-slate-600 hover:text-slate-300 transition-colors underline underline-offset-2"
             >
