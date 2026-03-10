@@ -58,8 +58,10 @@ function dbRows(rows: Record<string, unknown>[]): { rows: Record<string, unknown
 }
 
 /**
- * Configure les 8 appels successifs de db.execute() attendus par getKpis().
- * L'ordre correspond exactement a celui du Promise.all() dans le service.
+ * Configure les 12 appels successifs de db.execute() attendus par getKpis().
+ * L'ordre correspond exactement a celui du Promise.all() dans le service :
+ *   1-8  : période courante
+ *   9-12 : période précédente
  */
 function mockKpiExecuteCalls(overrides: {
   revenue?:       number
@@ -84,6 +86,7 @@ function mockKpiExecuteCalls(overrides: {
     appointments  = [],
   } = overrides
 
+  // ── Période courante ──────────────────────────────────────
   // 1 — CA
   mockExecute.mockResolvedValueOnce(dbRows([{ revenue }]))
   // 2 — Conversion
@@ -100,6 +103,16 @@ function mockKpiExecuteCalls(overrides: {
   mockExecute.mockResolvedValueOnce(dbRows([{ total_contacts: totalContacts }]))
   // 8 — Rendez-vous du jour
   mockExecute.mockResolvedValueOnce(dbRows(appointments as any))
+
+  // ── Période précédente ────────────────────────────────────
+  // 9 — CA période précédente
+  mockExecute.mockResolvedValueOnce(dbRows([{ revenue: 0 }]))
+  // 10 — Conversion période précédente
+  mockExecute.mockResolvedValueOnce(dbRows([{ won: 0, total: 0 }]))
+  // 11 — Nouveaux contacts période précédente
+  mockExecute.mockResolvedValueOnce(dbRows([{ new_contacts: 0 }]))
+  // 12 — Taches en retard période précédente
+  mockExecute.mockResolvedValueOnce(dbRows([{ overdue: 0 }]))
 }
 
 // ── IDs de test ───────────────────────────────────────────────
@@ -244,18 +257,18 @@ describe('DashboardService', () => {
     // ── Filtrage par role ───────────────────────────────────
 
     describe('filtrage par role', () => {
-      it('Given un role admin — When getKpis() est appele — Then db.execute est appele 8 fois (toutes les requetes)', async () => {
+      it('Given un role admin — When getKpis() est appele — Then db.execute est appele 12 fois (toutes les requetes + periode precedente)', async () => {
         // Given
         mockKpiExecuteCalls({})
 
         // When
         await service.getKpis(ADMIN_ID, 'admin')
 
-        // Then — 8 requetes paralleles via Promise.all
-        expect(mockExecute).toHaveBeenCalledTimes(8)
+        // Then — 12 requetes paralleles via Promise.all (8 courantes + 4 précédentes)
+        expect(mockExecute).toHaveBeenCalledTimes(12)
       })
 
-      it('Given un role commercial — When getKpis() est appele — Then db.execute est appele 8 fois', async () => {
+      it('Given un role commercial — When getKpis() est appele — Then db.execute est appele 12 fois', async () => {
         // Given
         mockKpiExecuteCalls({})
 
@@ -263,7 +276,7 @@ describe('DashboardService', () => {
         await service.getKpis(COMMERCIAL_ID, 'commercial')
 
         // Then
-        expect(mockExecute).toHaveBeenCalledTimes(8)
+        expect(mockExecute).toHaveBeenCalledTimes(12)
       })
     })
 
@@ -279,7 +292,7 @@ describe('DashboardService', () => {
 
         // Then — le service ne plante pas et retourne un resultat coherent
         expect(result.revenue_this_month).toBe(5000)
-        expect(mockExecute).toHaveBeenCalledTimes(8)
+        expect(mockExecute).toHaveBeenCalledTimes(12)
       })
 
       it('Given aucune date fournie — When getKpis() est appele — Then le mois courant est utilise par defaut', async () => {

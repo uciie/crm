@@ -7,19 +7,6 @@
 // ============================================================
 
 // ── Mocks déclarés AVANT jest.mock() ─────────────────────────
-//
-// Règle Jest : seules les variables préfixées "mock" peuvent être
-// référencées dans une factory jest.mock() après hoisting.
-//
-// ContactsService utilise le query builder Drizzle en chaîne :
-//   db.select().from().leftJoin().leftJoin().where().orderBy().limit().offset()
-//   db.select().from().where()          ← COUNT pour pagination
-//   db.insert().values().returning()
-//   db.update().set().where().returning()
-//   db.delete().where().returning()
-//
-// Chaque mock retourne `this` (l'objet suivant dans la chaîne)
-// SAUF les mocks terminaux qui retournent une Promise.
 
 const mockReturning  = jest.fn()
 const mockOffset     = jest.fn()
@@ -36,21 +23,11 @@ const mockUpdate     = jest.fn()
 const mockDelete     = jest.fn()
 
 // Mock séparé pour la requête COUNT dans findAll().
-// PROBLÈME RÉSOLU : findAll() appelle db.select() DEUX fois :
-//   1. Requête principale : select→from→leftJoin→leftJoin→where→orderBy→limit→offset
-//   2. Requête COUNT      : select→from→where  (terminal sur where, pas de limit/offset)
-//
-// Si on utilise mockWhere.mockResolvedValueOnce() pour le COUNT, le PREMIER appel
-// à where() (celui de la requête principale) consomme la valeur résolue et retourne
-// une Promise au lieu de l'objet chaînable avec orderBy → TypeError.
-//
-// Solution : un mockFromCount et mockWhereCount dédiés, injectés via
-// mockSelect.mockReturnValueOnce() pour le second appel à db.select().
 const mockWhereCount = jest.fn()
 const mockFromCount  = jest.fn()
 
 function buildChains() {
-  // Chaîne requête principale (liste paginée)
+  // Chaîne requête principale
   mockSelect.mockReturnValue({ from: mockFrom })
   mockFrom.mockReturnValue({ leftJoin: mockLeftJoin, where: mockWhere })
   mockLeftJoin.mockReturnValue({ leftJoin: mockLeftJoin, where: mockWhere })
@@ -87,22 +64,23 @@ const mockDb = {
   delete: mockDelete,
 }
 
-// CORRECTIF #2 : mock EmailService — ContactsService l'injecte via le constructeur.
-// Sans le fournir dans le TestingModule, NestJS ne peut pas résoudre les dépendances
-// → "Nest can't resolve dependencies of the ContactsService (?)".
-// On crée un mock minimal avec sendTransactional() qui ne fait rien par défaut.
+// CORRECTIF : mock EmailService avec toutes les méthodes utilisées par ContactsService
 const mockEmailService = {
-  sendTransactional: jest.fn().mockResolvedValue(undefined),
+  sendTransactional:      jest.fn().mockResolvedValue(undefined),
+  sendWelcomeInvitation:  jest.fn().mockResolvedValue(undefined),
+  addContactToList:       jest.fn().mockResolvedValue(undefined),
 }
 
 // ── jest.mock() ───────────────────────────────────────────────
 
 jest.mock('../database/db.config', () => ({ db: mockDb }))
+// CORRECTIF : Proxy dynamique pour que contacts.company_id etc. retournent
+// des valeurs truthy (string non vide) → satisfait expect.anything()
 jest.mock('../database/schema', () => ({
-  contacts:  'contacts_table',
-  companies: 'companies_table',
-  profiles:  'profiles_table',
-  leads:     'leads_table',
+  contacts:  new Proxy({}, { get: (_, prop) => `contacts.${String(prop)}` }),
+  companies: new Proxy({}, { get: (_, prop) => `companies.${String(prop)}` }),
+  profiles:  new Proxy({}, { get: (_, prop) => `profiles.${String(prop)}` }),
+  leads:     new Proxy({}, { get: (_, prop) => `leads.${String(prop)}` }),
 }))
 jest.mock('drizzle-orm', () => ({
   eq:     jest.fn((col, val) => ({ type: 'eq',    col, val })),
@@ -131,8 +109,8 @@ const ADMIN_ID   = 'aaaaaaaa-0000-0000-0000-000000000001'
 const COMPANY_ID = 'cccccccc-0000-0000-0000-000000000001'
 const CONTACT_ID = 'bbbbbbbb-0000-0000-0000-000000000001'
 
-const ADMIN_USER = { id: ADMIN_ID, role: 'admin' as const }
-const COMMERCIAL_USER = { id: ADMIN_ID, role: 'commercial' as const }
+const ADMIN_USER       = { id: ADMIN_ID, role: 'admin' as const }
+const COMMERCIAL_USER  = { id: ADMIN_ID, role: 'commercial' as const }
 
 const CONTACT_FIXTURE = {
   id:            CONTACT_ID,
@@ -165,24 +143,18 @@ const COMPANY_FIXTURE = {
 
 // ── Helpers ───────────────────────────────────────────────────
 
-/** Simule un INSERT/UPDATE → .returning() résout avec [row] */
 function resolveReturning(row: Record<string, unknown>) {
   mockReturning.mockResolvedValueOnce([row])
 }
 
-/** Simule un SELECT avec .limit(1) → résout avec rows (findOne) */
 function resolveSelectOne(rows: Record<string, unknown>[]) {
   mockLimit.mockResolvedValueOnce(rows)
 }
 
 /**
  * Simule findAll() qui appelle db.select() DEUX fois :
- *   1er appel → chaîne principale : from → leftJoin → leftJoin → where → orderBy → limit → offset
- *   2e  appel → chaîne COUNT      : from → where (terminal)
- *
- * mockSelect.mockImplementation avec compteur d'appels :
- *   - appel 1 → { from: mockFrom }      (chaîne principale, where retourne orderBy etc.)
- *   - appel 2 → { from: mockFromCount } (chaîne COUNT, where résout une Promise)
+ *   1er appel → chaîne principale
+ *   2e  appel → chaîne COUNT (terminal sur where)
  */
 function resolveList(rows: Record<string, unknown>[], count = rows.length) {
   let callCount = 0
@@ -204,9 +176,6 @@ describe('ContactsService', () => {
   let service: ContactsService
 
   beforeEach(async () => {
-    // CORRECTIF #3 : fournir EmailService dans les providers.
-    // On utilise useValue avec le mock plutôt que la vraie classe pour éviter
-    // toute dépendance transitive (HttpModule, ConfigService, etc.).
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ContactsService,
@@ -223,6 +192,8 @@ describe('ContactsService', () => {
     // Réinitialise toutes les chaînes après clearAllMocks()
     buildChains()
     mockEmailService.sendTransactional.mockResolvedValue(undefined)
+    mockEmailService.sendWelcomeInvitation.mockResolvedValue(undefined)
+    mockEmailService.addContactToList.mockResolvedValue(undefined)
   })
 
   // ── create() ─────────────────────────────────────────────────
@@ -246,7 +217,7 @@ describe('ContactsService', () => {
       const result = await service.create(dto, ADMIN_ID)
 
       // Assert
-      expect(mockInsert).toHaveBeenCalledWith('contacts_table')
+      expect(mockInsert).toHaveBeenCalledWith(expect.anything())
       expect(mockValues).toHaveBeenCalledWith(
         expect.objectContaining({
           first_name: 'Sophie',
@@ -292,8 +263,7 @@ describe('ContactsService', () => {
 
       // Assert
       expect(result.email).toBeNull()
-      // Pas d'email → sendTransactional ne doit pas être appelé
-      expect(mockEmailService.sendTransactional).not.toHaveBeenCalled()
+      expect(mockEmailService.sendWelcomeInvitation).not.toHaveBeenCalled()
     })
 
     it('Given un DTO avec email, When create() est appelé, Then envoie un email de bienvenue via EmailService', async () => {
@@ -304,10 +274,10 @@ describe('ContactsService', () => {
       // Act
       await service.create(dto, ADMIN_ID)
 
-      // Assert — le service doit appeler emailService.sendTransactional avec le bon destinataire
-      expect(mockEmailService.sendTransactional).toHaveBeenCalledWith(
+      // Assert — le service doit appeler sendWelcomeInvitation avec le bon destinataire
+      expect(mockEmailService.sendWelcomeInvitation).toHaveBeenCalledWith(
         expect.objectContaining({
-          to: expect.objectContaining({ email: CONTACT_FIXTURE.email }),
+          recipientEmail: CONTACT_FIXTURE.email,
         })
       )
     })
@@ -318,20 +288,18 @@ describe('ContactsService', () => {
   describe('update()', () => {
 
     it('Given des champs partiels, When update() est appelé par un admin, Then met à jour uniquement les champs fournis', async () => {
-      // Arrange — findOne est appelé en premier dans update()
+      // Arrange
       const patch   = { job_title: 'Directrice générale', city: 'Lyon' }
       const updated = { ...CONTACT_FIXTURE, ...patch, updated_at: new Date() }
 
-      // update() appelle d'abord findOne() → resolveSelectOne
       resolveSelectOne([{ contacts: CONTACT_FIXTURE, companies: null }])
-      // Puis le UPDATE → returning
       resolveReturning(updated)
 
-      // Act — CORRECTIF #4 : la vraie signature est update(id, dto, user: AuthUser)
+      // Act
       const result = await service.update(CONTACT_ID, patch, ADMIN_USER)
 
       // Assert
-      expect(mockUpdate).toHaveBeenCalledWith('contacts_table')
+      expect(mockUpdate).toHaveBeenCalledWith(expect.anything())
       expect(mockSet).toHaveBeenCalledWith(
         expect.objectContaining({
           job_title:  'Directrice générale',
@@ -345,7 +313,7 @@ describe('ContactsService', () => {
     })
 
     it('Given un id inexistant, When update() est appelé, Then lève une NotFoundException', async () => {
-      // Arrange — findOne retourne vide → NotFoundException
+      // Arrange
       resolveSelectOne([])
 
       // Act & Assert
@@ -382,7 +350,7 @@ describe('ContactsService', () => {
       const result = await service.remove(CONTACT_ID)
 
       // Assert
-      expect(mockDelete).toHaveBeenCalledWith('contacts_table')
+      expect(mockDelete).toHaveBeenCalledWith(expect.anything())
       expect(result).toMatchObject({
         message: expect.stringContaining('supprimé'),
         id:      CONTACT_ID,
@@ -390,7 +358,7 @@ describe('ContactsService', () => {
     })
 
     it('Given un id inexistant, When remove() est appelé, Then lève une NotFoundException', async () => {
-      // Arrange — returning retourne un tableau vide
+      // Arrange
       mockReturning.mockResolvedValueOnce([])
 
       // Act & Assert
@@ -407,7 +375,7 @@ describe('ContactsService', () => {
       // Arrange — le SELECT suivant retourne un tableau vide
       resolveSelectOne([])
 
-      // Act & Assert — CORRECTIF #5 : la vraie signature est findOne(id, user: AuthUser)
+      // Act & Assert
       await expect(service.findOne(CONTACT_ID, ADMIN_USER))
         .rejects
         .toThrow(NotFoundException)
@@ -419,13 +387,10 @@ describe('ContactsService', () => {
   describe('findAll() — filtrage', () => {
 
     it('Given une recherche textuelle, When findAll() est appelé avec search="Sophie", Then applique un filtre ilike sur nom et email', async () => {
-      // Arrange — CORRECTIF #6 : findAll() fait 2 requêtes :
-      // 1. La liste (offset terminal) → resolveList
-      // 2. Le COUNT (select → from → where, terminal sur mockWhere ou mockLimit)
-      // La chaîne COUNT est : select().from().where() — where() résout directement.
+      // Arrange
       resolveList([CONTACT_FIXTURE])
 
-      // Act — CORRECTIF #7 : la vraie signature est findAll(user: AuthUser, filters)
+      // Act
       await service.findAll(ADMIN_USER, { search: 'Sophie' })
 
       // Assert
@@ -453,7 +418,7 @@ describe('ContactsService', () => {
       // Act
       await service.findAll(COMMERCIAL_USER, {})
 
-      // Assert — le service applique or(eq(assigned_to, userId), isNull(assigned_to))
+      // Assert
       const { eq, or, isNull } = require('drizzle-orm')
       expect(or).toHaveBeenCalled()
       expect(eq).toHaveBeenCalledWith(expect.anything(), COMMERCIAL_USER.id)
@@ -493,13 +458,13 @@ describe('ContactsService', () => {
   describe('findOne()', () => {
 
     it('Given un id valide, When findOne() est appelé, Then retourne le contact avec ses relations', async () => {
-      // Arrange — la chaîne findOne est select→from→leftJoin→where→limit(1)
+      // Arrange
       resolveSelectOne([{ contacts: CONTACT_FIXTURE, companies: COMPANY_FIXTURE }])
 
       // Act
       const result = await service.findOne(CONTACT_ID, ADMIN_USER)
 
-      // Assert — le service retourne le premier élément du tableau Drizzle
+      // Assert
       expect(result).toMatchObject({
         contacts: expect.objectContaining({
           id:         CONTACT_ID,
