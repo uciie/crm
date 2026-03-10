@@ -18,6 +18,8 @@ import { api }                from '@/lib/api'
 import { Badge }              from '@/components/ui/Badge'
 import { Spinner }            from '@/components/ui/Spinner'
 import { Button }             from '@/components/ui/Button'
+import { Pagination }         from '@/components/ui/Pagination'
+import { usePagination }      from '@/hooks/usePagination'
 import { formatDate }         from '@/lib/utils'
 import { CampaignModal }      from '@/components/campaigns/CampaignModal'
 import type { EmailCampaign } from '@/types'
@@ -31,10 +33,9 @@ import {
 } from './campaign-templates'
 import { useAuth } from '@/hooks/useAuth'
 
-// ── Correspondance nom de campagne → template HTML local ─────
-// Permet d'afficher les aperçus même si htmlContent n'est pas
-// stocké en base. La clé est un fragment du nom de campagne
-// (insensible à la casse).
+const PAGE_SIZE = 5
+
+// ── Correspondance nom → template HTML local ─────────────────
 const TEMPLATE_MATCHERS: Array<{ keywords: string[]; html: string }> = [
   { keywords: ['lancement', 'q1', 'launch'],       html: HTML_LANCEMENT_Q1      },
   { keywords: ['newsletter', 'mars', 'march'],      html: HTML_NEWSLETTER_MARS   },
@@ -210,6 +211,8 @@ export default function CampaignsPage() {
   const [preview, setPreview]       = useState<(EmailCampaign & { htmlContent?: string }) | null>(null)
   const [view, setView]             = useState<'table' | 'charts'>('table')
   const { isAdmin, isCommercial } = useAuth()
+  // ── Pagination client (5 par page) ───────────────────────
+  const pagination = usePagination(campaigns, PAGE_SIZE)
   
   const loadCampaigns = () => {
     setLoading(true)
@@ -222,6 +225,7 @@ export default function CampaignsPage() {
           roi:        c.roi ?? calculateRoi(c.cost, c.revenue_generated),
         }))
         setCampaigns(enriched)
+        pagination.reset()
       })
       .catch(() => setCampaigns([]))
       .finally(() => setLoading(false))
@@ -244,6 +248,12 @@ export default function CampaignsPage() {
   const campaignsWithHtml = useMemo(() =>
     campaigns.map(c => ({ ...c, resolvedHtml: resolveHtmlContent(c) })),
     [campaigns]
+  )
+
+  // Page courante avec resolvedHtml
+  const pageItemsWithHtml = useMemo(() =>
+    pagination.pageItems.map(c => ({ ...c, resolvedHtml: resolveHtmlContent(c) })),
+    [pagination.pageItems]
   )
 
   const perfChartData = useMemo(() =>
@@ -352,77 +362,74 @@ export default function CampaignsPage() {
         <>
           {/* ── VUE TABLEAU ───────────────────────────────────── */}
           {view === 'table' && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    {['Campagne', 'Statut', 'Envois', 'Taux ouv.', 'Taux clic', 'Coût', 'CA généré', 'ROI', 'Planifiée le', ''].map(h => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                        {h}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {campaignsWithHtml.map(c => {
-                    const scfg = STATUS_CFG[c.status as keyof typeof STATUS_CFG] ?? STATUS_CFG.brouillon
-                    const roi  = c.roi ?? calculateRoi(c.cost, c.revenue_generated)
-                    return (
-                      <tr key={c.id} className="hover:bg-gray-50 transition">
-                        <td className="px-4 py-3.5">
-                          <p className="text-sm font-semibold text-gray-800">{c.name}</p>
-                          <p className="text-xs text-gray-400 truncate max-w-[180px]">{c.subject}</p>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <Badge label={scfg.label} color={scfg.color} bg={scfg.bg} />
-                        </td>
-                        <td className="px-4 py-3.5 text-sm text-gray-700 tabular-nums">
-                          {c.sent_count.toLocaleString('fr-FR')}
-                        </td>
-                        <td className="px-4 py-3.5 text-sm text-gray-700">
-                          {c.open_rate  != null ? `${c.open_rate}%`  : '—'}
-                        </td>
-                        <td className="px-4 py-3.5 text-sm text-gray-700">
-                          {c.click_rate != null ? `${c.click_rate}%` : '—'}
-                        </td>
-                        <td className="px-4 py-3.5 text-sm text-gray-500 tabular-nums">
-                          {Number(c.cost ?? 0) > 0 ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(c.cost)) : '—'}
-                        </td>
-                        <td className="px-4 py-3.5 text-sm text-gray-700 tabular-nums">
-                          {Number(c.revenue_generated ?? 0) > 0 ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(c.revenue_generated)) : '—'}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <RoiBadge roi={roi} />
-                        </td>
-                        <td className="px-4 py-3.5 text-sm text-gray-500">
-                          {formatDate(c.scheduled_at ?? c.sent_at)}
-                        </td>
-                        {/* Bouton prévisualisation — visible si un template est résolu */}
-                        <td className="px-3 py-3.5">
-                          {c.resolvedHtml && (
-                            <button
-                              onClick={() => setPreview(c)}
-                              title="Prévisualiser le HTML"
-                              className="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 border border-slate-200 hover:border-blue-400 hover:text-blue-500 transition-colors rounded"
-                            >
-                              <Eye className="w-3 h-3" />
-                              Aperçu
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                  {campaigns.length === 0 && (
+            <>
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-100">
                     <tr>
-                      <td colSpan={10} className="text-center py-10 text-gray-400 text-sm">
-                        Aucune campagne
-                      </td>
+                      {['Campagne', 'Statut', 'Envois', 'Taux ouv.', 'Taux clic', 'Coût', 'CA généré', 'ROI', 'Planifiée le', ''].map(h => (
+                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
+                      ))}
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {pageItemsWithHtml.map(c => {
+                      const scfg = STATUS_CFG[c.status as keyof typeof STATUS_CFG] ?? STATUS_CFG.brouillon
+                      const roi  = c.roi ?? calculateRoi(c.cost, c.revenue_generated)
+                      return (
+                        <tr key={c.id} className="hover:bg-gray-50 transition">
+                          <td className="px-4 py-3.5">
+                            <p className="text-sm font-semibold text-gray-800">{c.name}</p>
+                            <p className="text-xs text-gray-400 truncate max-w-[180px]">{c.subject}</p>
+                          </td>
+                          <td className="px-4 py-3.5"><Badge label={scfg.label} color={scfg.color} bg={scfg.bg} /></td>
+                          <td className="px-4 py-3.5 text-sm text-gray-700 tabular-nums">{c.sent_count.toLocaleString('fr-FR')}</td>
+                          <td className="px-4 py-3.5 text-sm text-gray-700">{c.open_rate  != null ? `${c.open_rate}%`  : '—'}</td>
+                          <td className="px-4 py-3.5 text-sm text-gray-700">{c.click_rate != null ? `${c.click_rate}%` : '—'}</td>
+                          <td className="px-4 py-3.5 text-sm text-gray-500 tabular-nums">
+                            {Number(c.cost ?? 0) > 0 ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(c.cost)) : '—'}
+                          </td>
+                          <td className="px-4 py-3.5 text-sm text-gray-700 tabular-nums">
+                            {Number(c.revenue_generated ?? 0) > 0 ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(Number(c.revenue_generated)) : '—'}
+                          </td>
+                          <td className="px-4 py-3.5"><RoiBadge roi={roi} /></td>
+                          <td className="px-4 py-3.5 text-sm text-gray-500">{formatDate(c.scheduled_at ?? c.sent_at)}</td>
+                          <td className="px-3 py-3.5">
+                            {c.resolvedHtml && (
+                              <button
+                                onClick={() => setPreview(c)}
+                                title="Prévisualiser le HTML"
+                                className="flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-500 border border-slate-200 hover:border-blue-400 hover:text-blue-500 transition-colors rounded"
+                              >
+                                <Eye className="w-3 h-3" />
+                                Aperçu
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                    {campaigns.length === 0 && (
+                      <tr>
+                        <td colSpan={10} className="text-center py-10 text-gray-400 text-sm">Aucune campagne</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* ── Pagination ── */}
+              <Pagination
+                page={pagination.page}
+                totalPages={pagination.totalPages}
+                total={campaigns.length}
+                limit={PAGE_SIZE}
+                onPrev={pagination.prevPage}
+                onNext={pagination.nextPage}
+                onPage={pagination.setPage}
+                entityLabel="campagnes"
+              />
+            </>
           )}
 
           {/* ── VUE GRAPHIQUES ────────────────────────────────── */}
@@ -498,6 +505,7 @@ export default function CampaignsPage() {
               </div>
 
               {/* ── Aperçus des contenus email ─────────────────── */}
+              {/* Note : la vue aperçus affiche toutes les campagnes avec HTML (pas paginées) */}
               <div className="xl:col-span-2">
                 <p className="text-[10px] font-bold tracking-[0.18em] uppercase text-slate-500 mb-3">
                   Aperçus des contenus email
@@ -587,6 +595,7 @@ export default function CampaignsPage() {
           onSaved={newCampaign => {
             setShowModal(false)
             setCampaigns(prev => [newCampaign, ...prev])
+            pagination.reset()
           }}
         />
       )}

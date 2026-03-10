@@ -1,19 +1,21 @@
 'use client'
 // ============================================================
 // app/(dashboard)/contacts/page.tsx
-// Page principale des contacts
+// MODIFIÉ : pagination limitée à 5 éléments par page
 // ============================================================
 
-import { useState }            from 'react'
-import { Users }               from 'lucide-react'
-import { ContactsDataTable }   from '@/components/contacts/ContactDataTable'
-import { ContactForm }         from '@/components/contacts/ContactForm'
-import type { Contact }        from '@/types/crm.types'
+import { useState } from 'react'
+import { Users }                 from 'lucide-react'
+import { ContactsDataTable }     from '@/components/contacts/ContactDataTable'
+import { ContactForm }           from '@/components/contacts/ContactForm'
+import type { Contact }          from '@/types/crm.types'
+
+const PAGE_SIZE = 5
 
 export default function ContactsPage() {
-  const [showForm, setShowForm]     = useState(false)
+  const [showForm, setShowForm]       = useState(false)
   const [editContact, setEditContact] = useState<Contact | null>(null)
-  const [refreshKey, setRefreshKey] = useState(0)
+  const [refreshKey, setRefreshKey]   = useState(0)
 
   const handleSaved = (_: Contact) => {
     setShowForm(false)
@@ -36,12 +38,13 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      {/* ── Tableau ── */}
+      {/* ── Tableau + Pagination intégrée dans ContactsDataTable ── */}
       <div className="flex-1 overflow-hidden p-6">
         <ContactsDataTable
           onCreateClick={() => { setEditContact(null); setShowForm(true) }}
           onEditClick={c => { setEditContact(c); setShowForm(true) }}
           refreshKey={refreshKey}
+          pageSize={PAGE_SIZE}
         />
       </div>
 

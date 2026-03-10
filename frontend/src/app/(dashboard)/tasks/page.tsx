@@ -15,11 +15,15 @@ import { ToastContainer }   from '@/components/ui/Toast'
 import { CalendarView }     from '@/components/tasks/CalendarView'
 import { TaskList }         from '@/components/tasks/TaskList'
 import { TaskForm }         from '@/components/tasks/TaskForm'
+import { Pagination }       from '@/components/ui/Pagination'
+import { usePagination }    from '@/hooks/usePagination'
 import { useTasks }         from '@/hooks/useTasks'
 import { isOverdue, isDueToday } from '@/lib/task-config'
 import { TaskStatus }       from '@/types/index'
 import type { Task } from '@/types/index'
 import type { TaskFormValues } from '@/components/tasks/TaskForm'
+
+const PAGE_SIZE = 5
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Stat Card
@@ -103,6 +107,12 @@ export default function TasksPage() {
   const [selected, setSelected] = useState<Task | undefined>()
 
   const { tasks, loading, create, update, remove, toggle } = useTasks()
+
+  // ── Pagination client (5 par page) — uniquement vue liste ──
+  const pagination = usePagination(tasks, PAGE_SIZE)
+
+  // Reset page when tasks list changes
+  useEffect(() => { pagination.reset() }, [tasks.length])
 
   const stats = useMemo(() => ({
     todo:        tasks.filter(t => t.status === TaskStatus.AFaire).length,
@@ -206,7 +216,7 @@ export default function TasksPage() {
         {/* Panel principal */}
         <div className="bg-slate-950 border border-slate-800">
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-            <TabBar active={tab} onChange={setTab} />
+            <TabBar active={tab} onChange={t => { setTab(t); pagination.reset() }} />
             <div className="flex items-center gap-3">
               {stats.due_soon > 0 && (
                 <span className="hidden sm:flex items-center gap-1.5 text-[10px] font-bold text-amber-500 uppercase tracking-wide">
@@ -215,7 +225,12 @@ export default function TasksPage() {
                 </span>
               )}
               <span className="text-[10px] text-slate-700 font-medium uppercase tracking-wide hidden sm:block">
-                {loading ? '···' : `${tasks.length} tâche${tasks.length > 1 ? 's' : ''}`}
+                {loading
+                  ? '···'
+                  : tab === 'list'
+                    ? `${pagination.page}/${pagination.totalPages} — ${tasks.length} tâche${tasks.length > 1 ? 's' : ''}`
+                    : `${tasks.length} tâche${tasks.length > 1 ? 's' : ''}`
+                }
               </span>
             </div>
           </div>
@@ -226,19 +241,35 @@ export default function TasksPage() {
             className="min-h-[520px]"
           >
             {tab === 'list' ? (
-              <TaskList
-                tasks={tasks}
-                loading={loading}
-                onToggle={toggle}
-                onOpen={handleOpen}       // ← clic ligne  → mode 'view'
-                onEdit={handleEdit}       // ← clic stylo  → mode 'edit'
-                onDelete={handleDelete}
-              />
+              <>
+                <TaskList
+                  tasks={pagination.pageItems}
+                  loading={loading}
+                  onToggle={toggle}
+                  onOpen={handleOpen}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                />
+                {/* Pagination — intégrée dans le panel pour cohérence visuelle */}
+                <div className="px-4 py-3 border-t border-slate-800">
+                  <Pagination
+                    page={pagination.page}
+                    totalPages={pagination.totalPages}
+                    total={tasks.length}
+                    limit={PAGE_SIZE}
+                    onPrev={pagination.prevPage}
+                    onNext={pagination.nextPage}
+                    onPage={pagination.setPage}
+                    entityLabel="tâches"
+                  />
+                </div>
+              </>
             ) : (
+              // La vue calendrier affiche toutes les tâches (pas de pagination)
               <CalendarView
                 tasks={tasks}
                 loading={loading}
-                onTaskClick={handleOpen}  // ← clic carte  → mode 'view'
+                onTaskClick={handleOpen}
               />
             )}
           </div>
@@ -251,7 +282,7 @@ export default function TasksPage() {
         task={selected}
         onClose={handleClose}
         onSubmit={handleFormSubmit}
-        onEdit={handleSwitchToEdit}   // bouton "Modifier" dans la vue lecture
+        onEdit={handleSwitchToEdit}
       />
 
       <ToastContainer />

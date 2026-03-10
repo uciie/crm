@@ -3,7 +3,7 @@
 // app/(dashboard)/leads/page.tsx
 // ============================================================
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useRouter }             from 'next/navigation'
 import {
   PlusCircle, RefreshCcw, CheckCircle2, XCircle,
@@ -14,9 +14,13 @@ import { useAuth }       from '@/hooks/useAuth'
 import { leadsService }  from '@/services/leads.service'
 import { LeadForm }      from '@/components/leads/LeadForm'
 import { TableSkeleton } from '@/components/ui/Skeleton'
+import { Pagination }    from '@/components/ui/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { cn }            from '@/lib/utils'
 import type { Lead }     from '@/types'
+
+const PAGE_SIZE = 5
 
 // ── Tooltip ───────────────────────────────────────────────────
 
@@ -50,7 +54,7 @@ function Tooltip({ label, children, position = 'top' }: TooltipProps) {
   )
 }
 
-// ── Icones statut (Lucide) ────────────────────────────────────
+// ── Icones statut ─────────────────────────────────────────────
 
 const STATUS_CFG: Record<string, {
   icon:  React.ElementType
@@ -84,14 +88,16 @@ function StatusBadge({ status }: { status: string }) {
 // ── Page ──────────────────────────────────────────────────────
 
 export default function LeadsPage() {
-  const router                          = useRouter()          // FIX 1: useRouter hook, pas l import direct
-  const { leads, loading, refetch }     = useLeads()
-  const { isAdmin, isCommercial }       = useAuth()
-  const [showForm, setShowForm]         = useState(false)
-  const [editLead, setEditLead]         = useState<Lead | null>(null)
-  const [deletingId, setDeletingId]     = useState<string | null>(null) // FIX 2: etat manquant
+  const router                      = useRouter()
+  const { leads, loading, refetch } = useLeads()
+  const { isAdmin, isCommercial }   = useAuth()
+  const [showForm, setShowForm]     = useState(false)
+  const [editLead, setEditLead]     = useState<Lead | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  // FIX 3: handler delete manquant
+  // ── Pagination client (5 par page) ───────────────────────
+  const pagination = usePagination(leads, PAGE_SIZE)
+
   const handleDelete = useCallback(async (id: string) => {
     if (!confirm('Supprimer ce lead ?')) return
     setDeletingId(id)
@@ -111,16 +117,15 @@ export default function LeadsPage() {
     refetch()
   }, [refetch])
 
-  // FIX 4: ouvrir le formulaire d edition correctement
   const handleEdit = useCallback((lead: Lead) => {
     setEditLead(lead)
-    setShowForm(true)   // FIX: setShowModal -> setShowForm
+    setShowForm(true)
   }, [])
 
   return (
     <div className="flex flex-col gap-5 h-full p-6">
 
-      {/* En-tete */}
+      {/* En-tête */}
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -129,6 +134,7 @@ export default function LeadsPage() {
           </div>
           <p className="text-xs text-slate-600">
             {leads.length} opportunit{leads.length !== 1 ? 'és' : 'é'}
+            {' — '}page {pagination.page}/{pagination.totalPages}
           </p>
         </div>
         {isCommercial && (
@@ -143,12 +149,11 @@ export default function LeadsPage() {
       </div>
 
       {/* Tableau */}
-      <div className="bg-slate-900 border border-slate-800 overflow-hidden flex-1">
+      <div className="bg-slate-900 border border-slate-800 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-slate-950/60 border-b border-slate-800">
               <tr>
-                {/* FIX 5: colonne Actions ajoutee dans les headers */}
                 {['Opportunité', 'Contact', 'Valeur', 'Probabilité', 'Statut', 'Clôture', ''].map((h, i) => (
                   <th key={i} className={cn(
                     'px-5 py-3.5 text-[10px] font-bold tracking-[0.18em] uppercase text-slate-600',
@@ -161,16 +166,15 @@ export default function LeadsPage() {
             </thead>
             <tbody className="divide-y divide-slate-800/50">
               {loading ? (
-                <TableSkeleton rows={8} cols={7} />
-              ) : leads.length === 0 ? (
+                <TableSkeleton rows={PAGE_SIZE} cols={7} />
+              ) : pagination.pageItems.length === 0 ? (
                 <tr>
-                  {/* FIX 6: colSpan 6 -> 7 */}
                   <td colSpan={7} className="text-center py-16 text-slate-600 text-sm">
                     Aucun lead trouvé
                   </td>
                 </tr>
               ) : (
-                leads.map(lead => (
+                pagination.pageItems.map(lead => (
                   <tr
                     key={lead.id}
                     className="hover:bg-slate-800/30 transition-colors group"
@@ -257,7 +261,19 @@ export default function LeadsPage() {
         </div>
       </div>
 
-      {/* Formulaire creation / edition */}
+      {/* ── Pagination ── */}
+      <Pagination
+        page={pagination.page}
+        totalPages={pagination.totalPages}
+        total={leads.length}
+        limit={PAGE_SIZE}
+        onPrev={pagination.prevPage}
+        onNext={pagination.nextPage}
+        onPage={pagination.setPage}
+        entityLabel="leads"
+      />
+
+      {/* Formulaire création / édition */}
       {(showForm || editLead) && (
         <LeadForm
           lead={editLead}

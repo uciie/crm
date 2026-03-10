@@ -16,8 +16,6 @@ import {
   Mail,
   Phone,
   Building2,
-  ChevronLeft,
-  ChevronRight,
   Pencil,
   Trash2,
   CheckCircle2,
@@ -25,6 +23,7 @@ import {
   ArrowUpRight,
   Loader2,
 } from 'lucide-react'
+import { Pagination } from '@/components/ui/Pagination'
 import { contactsService }    from '@/services/contacts.service'
 import { companiesService }   from '@/services/companies.service'
 import { useContacts }        from '@/hooks/useContacts'
@@ -37,7 +36,7 @@ import type {
   CompanyOption,
   ContactFilters,
   SortDirection,
-  Pagination,
+  Pagination as PaginationData,
 } from '@/types/crm.types'
 
 // ── Types internes ────────────────────────────────────────────
@@ -50,9 +49,13 @@ interface SortState {
 }
 
 interface ContactsDataTableProps {
-  onCreateClick: () => void
-  onEditClick:   (contact: Contact) => void
-  refreshKey?:   number
+  onCreateClick:      () => void
+  onEditClick:        (contact: Contact) => void
+  refreshKey?:        number
+  /** Nombre de lignes par page (défaut : 20) */
+  pageSize?:          number
+  /** Callback appelé à chaque chargement — remonte la liste complète au parent */
+  onContactsLoaded?:  (contacts: Contact[]) => void
 }
 
 // ── Sous-composants ───────────────────────────────────────────
@@ -120,6 +123,8 @@ export function ContactsDataTable({
   onCreateClick,
   onEditClick,
   refreshKey = 0,
+  pageSize = 20,
+  onContactsLoaded,
 }: ContactsDataTableProps) {
   const router               = useRouter()
   const { toast }            = useToast()
@@ -134,7 +139,12 @@ export function ContactsDataTable({
     setFilters = (() => {}) as any,
     refetch = (() => {}) as any,
     remove = (() => {}) as any,
-  } = useContacts()
+  } = useContacts({ limit: pageSize })
+
+  // Remonte la liste complète au parent dès qu'elle change
+  useEffect(() => {
+    if (onContactsLoaded) onContactsLoaded(contacts)
+  }, [contacts, onContactsLoaded])
 
   const [companies, setCompanies] = useState<CompanyOption[]>([])
 
@@ -608,29 +618,16 @@ export function ContactsDataTable({
 
       {/* ── Pagination ── */}
       {!loading && pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between pt-2">
-          <p className="text-xs text-slate-600">
-            Page {pagination.page} / {pagination.totalPages}
-          </p>
-          <div className="flex gap-1">
-            <button
-              disabled={pagination.page <= 1}
-              onClick={() => setPage(p => p - 1)}
-              className="p-2 border border-slate-800 text-slate-500 hover:border-slate-600 hover:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              aria-label="Page précédente"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              disabled={pagination.page >= pagination.totalPages}
-              onClick={() => setPage(p => p + 1)}
-              className="p-2 border border-slate-800 text-slate-500 hover:border-slate-600 hover:text-slate-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              aria-label="Page suivante"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        <Pagination
+          page={pagination.page}
+          totalPages={pagination.totalPages}
+          total={pagination.total}
+          limit={pageSize}
+          onPrev={() => setFilters({ ...(filters || {}), page: pagination.page - 1 })}
+          onNext={() => setFilters({ ...(filters || {}), page: pagination.page + 1 })}
+          onPage={p  => setFilters({ ...(filters || {}), page: p })}
+          entityLabel="contacts"
+        />
       )}
     </div>
   )
