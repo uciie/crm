@@ -155,6 +155,7 @@ crm/
 │   │   ├── campaigns/           # Intégration Brevo
 │   │   ├── database/            # db.config.ts, schema.ts (Drizzle)
 │   │   └── app.module.ts
+│   ├── scripts/                 # Exemples de template d'envoie d'email
 │   ├── Dockerfile.dev
 │   └── .env
 │
